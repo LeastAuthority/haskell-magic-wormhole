@@ -1,0 +1,6 @@
+.stack-work/
+.dir-locals.el
+doc/.env/
+doc/.ensure-pip
+doc/.ensure-virtualenv
+doc/*.svg

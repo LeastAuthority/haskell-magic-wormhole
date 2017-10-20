@@ -1,0 +1,33 @@
+name: magic-wormhole
+version: 0.1.0
+synopsis: Interact with Magic Wormhole
+description: |
+  Honestly, who can say?
+maintainer: Jonathan M. Lange <jml@mumak.net>
+license: Apache
+github: jml/haskell-magic-wormhole
+category: Crypto
+
+ghc-options: -Wall
+default-extensions:
+  - NoImplicitPrelude
+  - OverloadedStrings
+
+dependencies:
+  - base
+  - protolude
+
+library:
+  source-dirs: src
+
+tests:
+  tasty:
+    main: Tasty.hs
+    source-dirs: tests
+    dependencies:
+      - hedgehog
+      - magic-wormhole
+      - tasty
+      - tasty-hedgehog
+      - tasty-hspec
+

@@ -1,0 +1,7 @@
+resolver: lts-9.9
+
+packages:
+  - .
+
+extra-deps:
+  - tasty-hedgehog-0.1.0.1
