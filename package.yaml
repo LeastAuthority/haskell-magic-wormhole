@@ -12,6 +12,7 @@ ghc-options: -Wall
 default-extensions:
   - NoImplicitPrelude
   - OverloadedStrings
+  - TypeApplications
 
 dependencies:
   - base
@@ -19,6 +20,14 @@ dependencies:
 
 library:
   source-dirs: src
+
+executables:
+  hocus-pocus:
+    main: HocusPocus.hs
+    source-dirs: cmd
+    dependencies:
+      - magic-wormhole
+      - optparse-applicative
 
 tests:
   tasty:
