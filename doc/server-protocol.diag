@@ -1,0 +1,7 @@
+seqdiag {
+
+  Client --> Rendezvous [label = "Establish WS connection"];
+  Rendezvous -> Client [label = "welcome"];
+
+
+}
