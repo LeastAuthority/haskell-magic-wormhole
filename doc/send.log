@@ -1,0 +1,180 @@
+$ wormhole send
+>>>
+{'appid': u'lothar.com/wormhole/text-or-file-xfer',
+ u'id': u'147b',
+ 'side': u'1c58ca71a0',
+ u'type': u'bind'}
+>>>
+
+<<<
+{u'server_tx': 1508679334.008508, u'type': u'welcome', u'welcome': {}}
+<<<
+
+Text to send: blah
+Sending text message (4 Bytes)
+On the other computer, please run: wormhole receive
+
+>>>
+{u'id': u'54c1', u'type': u'allocate'}
+>>>
+
+<<<
+{u'id': u'147b', u'server_tx': 1508679340.073328, u'type': u'ack'}
+<<<
+
+<<<
+{u'id': u'54c1', u'server_tx': 1508679340.073589, u'type': u'ack'}
+>>>
+
+<<<
+{u'nameplate': u'6', u'server_tx': 1508679340.078051, u'type': u'allocated'}
+<<<
+
+>>>
+{u'id': u'20ee', 'nameplate': u'6', u'type': u'claim'}
+>>>
+
+Wormhole code is: 6-bradbury-skydive
+
+<<<
+{u'id': u'20ee', u'server_tx': 1508679340.359023, u'type': u'ack'}
+<<<
+
+<<<
+{u'mailbox': u'7mns7yrcsjjtg',
+ u'server_tx': 1508679340.361374,
+ u'type': u'claimed'}
+<<<
+
+>>>
+{u'id': u'b21f', 'mailbox': u'7mns7yrcsjjtg', u'type': u'open'}
+>>>
+
+>>>
+{'body': u'7b2270616b655f7631223a2022353361386138343265636437343233653365396436343963343639373232663231623036326261626262363339626639333736373238623834386465366561663332227d',
+ u'id': u'8d5d',
+ 'phase': u'pake',
+ u'type': u'add'}
+>>>
+
+<<<
+{u'id': u'b21f', u'server_tx': 1508679340.561169, u'type': u'ack'}
+<<<
+
+<<<
+{u'id': u'8d5d', u'server_tx': 1508679340.563612, u'type': u'ack'}
+<<<
+
+<<<
+{u'body': u'7b2270616b655f7631223a2022353361386138343265636437343233653365396436343963343639373232663231623036326261626262363339626639333736373238623834386465366561663332227d',
+ u'id': u'8d5d',
+ u'phase': u'pake',
+ u'server_rx': 1508679340.563583,
+ u'server_tx': 1508679340.565108,
+ u'side': u'1c58ca71a0',
+ u'type': u'message'}
+<<<
+
+
+# After receiver enters code
+
+<<<
+{u'body': u'7b2270616b655f7631223a2022353333313063616262323961313238353962653431346433666565336662623434643864326264643939643064633333656366326334333363633637346433653365227d',
+ u'id': u'4fec',
+ u'phase': u'pake',
+ u'server_rx': 1508679372.363706,
+ u'server_tx': 1508679372.365356,
+ u'side': u'27847ac046',
+ u'type': u'message'}
+<<<
+
+>>>
+{u'id': u'430b', 'nameplate': u'6', u'type': u'release'}
+>>>
+
+>>>
+{'body': u'89824f194f6757be46f0a9e4b16da3a685b02ad168a0e83f31a9db21368dece990c6821685a871f9c5816f5139b0f1c567ddacad64489158c8ecbd3e',
+ u'id': u'bc05',
+ 'phase': u'version',
+ u'type': u'add'}
+>>>
+
+<<<
+{u'id': u'430b', u'server_tx': 1508679372.723226, u'type': u'ack'}
+<<<
+
+<<<
+{u'server_tx': 1508679372.725504, u'type': u'released'}
+<<<
+
+<<<
+{u'id': u'bc05', u'server_tx': 1508679372.72587, u'type': u'ack'}
+<<<
+
+<<<
+{u'body': u'89824f194f6757be46f0a9e4b16da3a685b02ad168a0e83f31a9db21368dece990c6821685a871f9c5816f5139b0f1c567ddacad64489158c8ecbd3e',
+ u'id': u'bc05',
+ u'phase': u'version',
+ u'server_rx': 1508679372.725835,
+ u'server_tx': 1508679372.727562,
+ u'side': u'1c58ca71a0',
+ u'type': u'message'}
+<<<
+
+<<<
+{u'body': u'5b9071d3e36aea699bb1a61b9d9faef5f919efb00c7c452ccec91636fc8908ba0599e5d851f2fd966e02afb8e7e99194ddf6c3d4d57d657db21aa854',
+ u'id': u'c775',
+ u'phase': u'version',
+ u'server_rx': 1508679372.731448,
+ u'server_tx': 1508679372.732964,
+ u'side': u'27847ac046',
+ u'type': u'message'}
+<<<
+
+>>>
+{'body': u'8abfdc5c74bb8598fe4a09deac5e13b67d6c0fde4855da69a369b3026be15a58a5ce052df69bd926d70e8f14517147c7cd968bc7ed89c4a2fbd6c7e5eddbbce704aa5689333b',
+ u'id': u'1ff3',
+ 'phase': u'0',
+ u'type': u'add'}
+>>>
+
+<<<
+{u'id': u'1ff3', u'server_tx': 1508679372.886711, u'type': u'ack'}
+<<<
+
+<<<
+{u'body': u'8abfdc5c74bb8598fe4a09deac5e13b67d6c0fde4855da69a369b3026be15a58a5ce052df69bd926d70e8f14517147c7cd968bc7ed89c4a2fbd6c7e5eddbbce704aa5689333b',
+ u'id': u'1ff3',
+ u'phase': u'0',
+ u'server_rx': 1508679372.886628,
+ u'server_tx': 1508679372.888975,
+ u'side': u'1c58ca71a0',
+ u'type': u'message'}
+<<<
+
+<<<
+{u'body': u'5775fcced38a8aa13d2106ce1a2c30b47008ed7074cc5bf7d05e502b2999a1451ea30893f893699ee0e84fc517c28d55dd0eca7581ef1c88794de7d9bb4f87301f0e4b9c85b5333311',
+ u'id': u'4831',
+ u'phase': u'0',
+ u'server_rx': 1508679373.12009,
+ u'server_tx': 1508679373.122137,
+ u'side': u'27847ac046',
+ u'type': u'message'}
+<<<
+
+text message sent
+
+>>>
+{u'id': u'c85f',
+ 'mailbox': u'7mns7yrcsjjtg',
+ 'mood': u'happy',
+ u'type': u'close'}
+>>>
+
+<<<
+{u'id': u'c85f', u'server_tx': 1508679373.54096, u'type': u'ack'}
+<<<
+
+<<<
+{u'server_tx': 1508679373.548507, u'type': u'closed'}
+<<<

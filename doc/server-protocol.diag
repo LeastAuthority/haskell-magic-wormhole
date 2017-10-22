@@ -1,7 +1,26 @@
 seqdiag {
+    activation = none;
 
-  Client --> Rendezvous [label = "Establish WS connection"];
-  Rendezvous -> Client [label = "welcome"];
+    Sender <- Rendezvous [label = "welcome {motd: ..., error: ...}"];
+    Sender -> Rendezvous [label = "bind {appid: $APPID, side: $LSIDE}", leftnote = "randomly generate side"];
+    Rendezvous -> Receiver [label = "welcome {motd: ..., error: ...}"];
+    Rendezvous <- Receiver [label = "bind {appid: $APPID, side: $RSIDE}", rightnote = "randomly generate side"];
 
+    Sender => Rendezvous [label = "allocate", return = "allocated {nameplate: ...}"];
+    Receiver => Rendezvous  [label = "set", return = "", rightnote = "not sure about this"];
 
+    Sender => Rendezvous [label = "claim {nameplate: ...}", return = "claimed {mailbox: ...}"];
+    Receiver => Rendezvous  [label = "claim {nameplate: ...}", return = "claimed {mailbox: ...}"];
+
+    Sender ->> Rendezvous [label = "open {mailbox: ...}"];
+    Rendezvous <<- Receiver [label = "open {mailbox: ...}"];
+
+    Sender -> Rendezvous [label = "add {phase: str, body: hex}"];
+    Rendezvous -> Receiver [label = "message {side, phase, body, id}"];
+
+    Sender => Rendezvous [label = "close", return = "closed"];
+    Receiver => Rendezvous [label = "close", return = "closed"];
+
+    Sender => Rendezvous [label = "release {nameplate: ...}", return = "released"]
+    Receiver => Rendezvous  [label = "release {nameplate: ...}", return = "released"];
 }

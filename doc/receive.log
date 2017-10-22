@@ -1,0 +1,173 @@
+$ wormhole receive
+>>>
+{'appid': u'lothar.com/wormhole/text-or-file-xfer',
+ u'id': u'5c24',
+ 'side': u'e35ddad57e',
+ u'type': u'bind'}
+>>>
+
+<<<
+{u'server_tx': 1508679418.813193, u'type': u'welcome', u'welcome': {}}
+<<<
+
+>>>
+{u'id': u'ce03', u'type': u'list'}
+>>>
+
+Enter receive wormhole code:
+<<<
+{u'id': u'5c24', u'server_tx': 1508679418.989598, u'type': u'ack'}
+<<<
+
+<<<
+{u'id': u'ce03', u'server_tx': 1508679418.989837, u'type': u'ack'}
+<<<
+
+<<<
+{u'nameplates': [], u'server_tx': 1508679418.989998, u'type': u'nameplates'}
+<<<
+
+4-company-vulcan
+>>>
+{u'id': u'b32d', 'nameplate': u'4', u'type': u'claim'}
+>>>
+
+ (note: you can use <Tab> to complete words)
+<<<
+{u'id': u'b32d', u'server_tx': 1508679439.005412, u'type': u'ack'}
+<<<
+
+<<<
+{u'mailbox': u'v4bhpcxr74ymm',
+ u'server_tx': 1508679439.008967,
+ u'type': u'claimed'}
+<<<
+
+>>>
+{u'id': u'd876', 'mailbox': u'v4bhpcxr74ymm', u'type': u'open'}
+>>>
+
+>>>
+{'body': u'7b2270616b655f7631223a2022353334343434666637646237393466363965336264346332323433633438386536393737306636626265613737616338653739633563333534383232653137363437227d',
+ u'id': u'79b4',
+ 'phase': u'pake',
+ u'type': u'add'}
+>>>
+
+<<<
+{u'id': u'd876', u'server_tx': 1508679439.163593, u'type': u'ack'}
+<<<
+
+<<<
+{u'body': u'7b2270616b655f7631223a2022353335373239616361363534626136626534373962386631383731633366386665623537616261626266376438313633333135656438356238303837376538323065227d',
+ u'id': u'577c',
+ u'phase': u'pake',
+ u'server_rx': 1508679431.27782,
+ u'server_tx': 1508679439.165595,
+ u'side': u'd6d4f8adc9',
+ u'type': u'message'}
+<<<
+
+>>>
+{u'id': u'7029', 'nameplate': u'4', u'type': u'release'}
+>>>
+
+>>>
+{'body': u'c307c81ecfb26273ccc1c1adc3b32d03329cc6d1b82a7ea749eac96e2c2a96b4bd0ae01971e1212beb34c82fc01338964a4be7e9a8558f02c94efa1b',
+ u'id': u'34fe',
+ 'phase': u'version',
+ u'type': u'add'}
+>>>
+
+<<<
+{u'id': u'79b4', u'server_tx': 1508679439.165952, u'type': u'ack'}
+<<<
+
+<<<
+{u'body': u'7b2270616b655f7631223a2022353334343434666637646237393466363965336264346332323433633438386536393737306636626265613737616338653739633563333534383232653137363437227d',
+ u'id': u'79b4',
+ u'phase': u'pake',
+ u'server_rx': 1508679439.165925,
+ u'server_tx': 1508679439.167619,
+ u'side': u'e35ddad57e',
+ u'type': u'message'}
+<<<
+
+<<<
+{u'id': u'7029', u'server_tx': 1508679439.479687, u'type': u'ack'}
+<<<
+
+<<<
+{u'server_tx': 1508679439.481737, u'type': u'released'}
+<<<
+
+<<<
+{u'id': u'34fe', u'server_tx': 1508679439.482018, u'type': u'ack'}
+<<<
+
+<<<
+{u'body': u'c307c81ecfb26273ccc1c1adc3b32d03329cc6d1b82a7ea749eac96e2c2a96b4bd0ae01971e1212beb34c82fc01338964a4be7e9a8558f02c94efa1b',
+ u'id': u'34fe',
+ u'phase': u'version',
+ u'server_rx': 1508679439.48199,
+ u'server_tx': 1508679439.48361,
+ u'side': u'e35ddad57e',
+ u'type': u'message'}
+<<<
+
+<<<
+{u'body': u'812b962777da80692677dc474dc5649842a550c58d1de62d917aac169bbd311aa03527ac8502c7a6762d533b56a202dce7e0a1c069527e10876c3ee8',
+ u'id': u'a807',
+ u'phase': u'version',
+ u'server_rx': 1508679439.487161,
+ u'server_tx': 1508679439.488581,
+ u'side': u'd6d4f8adc9',
+ u'type': u'message'}
+<<<
+
+<<<
+{u'body': u'de01316ead99f157f72e2f338b6afbc6254ff9621eb9437a5aa70c2189ab6d22e0ef858a0a5f127ac85e92cf92b4f2c99ec3239aaaf73ac259519f0cc2b56351247f6460f8b7ac976309',
+ u'id': u'c301',
+ u'phase': u'0',
+ u'server_rx': 1508679439.674655,
+ u'server_tx': 1508679439.676787,
+ u'side': u'd6d4f8adc9',
+ u'type': u'message'}
+<<<
+
+omelette
+>>>
+{'body': u'ebde597586fd48287dae5581bb9f9927436465ef3b7c935fa50d8a11f9c44b4696a0c567bc31b6e2be38f76f6af6582d8ce708d23a3ddbbf69c3ee9993fc2599e12bdc01d5d72cd598',
+ u'id': u'becc',
+ 'phase': u'0',
+ u'type': u'add'}
+>>>
+
+>>>
+{u'id': u'8fbc',
+ 'mailbox': u'v4bhpcxr74ymm',
+ 'mood': u'happy',
+ u'type': u'close'}
+>>>
+
+<<<
+{u'id': u'becc', u'server_tx': 1508679439.835541, u'type': u'ack'}
+<<<
+
+<<<
+{u'body': u'ebde597586fd48287dae5581bb9f9927436465ef3b7c935fa50d8a11f9c44b4696a0c567bc31b6e2be38f76f6af6582d8ce708d23a3ddbbf69c3ee9993fc2599e12bdc01d5d72cd598',
+ u'id': u'becc',
+ u'phase': u'0',
+ u'server_rx': 1508679439.835477,
+ u'server_tx': 1508679439.837433,
+ u'side': u'e35ddad57e',
+ u'type': u'message'}
+<<<
+
+<<<
+{u'id': u'8fbc', u'server_tx': 1508679439.837638, u'type': u'ack'}
+<<<
+
+<<<
+{u'server_tx': 1508679439.839028, u'type': u'closed'}
+<<<
