@@ -6,14 +6,17 @@ module Main (main) where
 
 import Protolude
 
-import Network.URI (URI, parseURI)
+import Data.String (String)
+import Network.Socket (withSocketsDo)
+import Network.URI (URI(..), URIAuth(..), parseURI)
+import qualified Network.WebSockets as WS
 import qualified Options.Applicative as Opt
 
 
 data Options
   = Options
   { cmd :: Command
-  , rendezvousServerURL :: URI
+  , rendezvousEndpoint :: WebSocketEndpoint
   } deriving (Eq, Show)
 
 optionsParser :: Opt.Parser Options
@@ -21,17 +24,36 @@ optionsParser
   = Options
   <$> commandParser
   <*> Opt.option
-        (Opt.maybeReader parseURI)
+        (Opt.maybeReader (toWebSocketEndpoint <=< parseURI))
         ( Opt.long "rendezvous-url" <>
           Opt.help "Endpoint for the Rendezvous server" <>
-          Opt.value defaultRendezvousURL <>
+          Opt.value defaultEndpoint <>
           Opt.showDefault )
   where
     -- | Default URI for rendezvous server.
     --
     -- This is Brian Warner's personal server.
-    defaultRendezvousURL = mustParseURI "ws://relay.magic-wormhole.io:4000/v1"
-    mustParseURI uri = fromMaybe (panic . toS $ "Invalid URL: " <> uri) (parseURI uri)
+    defaultEndpoint = fromMaybe (panic "Invalid default URL") (toWebSocketEndpoint <=< parseURI $ "ws://relay.magic-wormhole.io:4000/v1")
+
+
+-- | Endpoint for a websocket connection.
+data WebSocketEndpoint = WebSocketEndpoint Hostname Port Path deriving (Eq, Show)
+
+type Hostname = String
+type Port = Int
+type Path = String
+
+-- | Turn a 'URI' into a 'WebSocketEndpoint', if we can.
+--
+-- Requires that the URI has an authority (i.e. host & port).
+-- Discards information from scheme, query, and fragment.
+toWebSocketEndpoint :: URI -> Maybe WebSocketEndpoint
+toWebSocketEndpoint uri = do
+  authority <- uriAuthority uri
+  port <- case uriPort authority of
+            "" -> empty
+            _:rest -> readMaybe rest
+  pure $ WebSocketEndpoint (uriRegName authority) port (uriPath uri)
 
 data Command
   = Send
@@ -46,11 +68,19 @@ commandParser = Opt.hsubparser $
 makeOptions :: Text -> Opt.Parser a -> Opt.ParserInfo a
 makeOptions headerText parser = Opt.info (Opt.helper <*> parser) (Opt.fullDesc <> Opt.header (toS headerText))
 
+-- | Execute 'Command' against a Wormhole Rendezvous server.
+app :: Command -> WS.ClientApp ()
+app command conn = do
+  print command
+  -- XXX: Just block waiting for the server to tell us stuff. To be a proper
+  -- client, we want to get stuff from the server and send stuff more or less
+  -- simultaneously.
+  void $ forever $ do
+    message <- WS.receiveData conn
+    liftIO $ putStrLn @Text message
+
 main :: IO ()
 main = do
   options <- Opt.execParser (makeOptions "hocus-pocus - summon and traverse magic wormholes" optionsParser)
-  print $ rendezvousServerURL options
-  case cmd options of
-    -- XXX: What's the Protolude way of saying "print this as text"?
-    Send -> putStrLn @Text "send"
-    Receive -> putStrLn @Text "receive"
+  let WebSocketEndpoint host port path = rendezvousEndpoint options
+  withSocketsDo $ WS.runClient host port path (app (cmd options))

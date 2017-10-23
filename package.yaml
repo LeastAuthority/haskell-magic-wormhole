@@ -16,7 +16,6 @@ default-extensions:
 
 dependencies:
   - base
-  - network-uri
   - protolude
 
 library:
@@ -29,6 +28,9 @@ executables:
     dependencies:
       - magic-wormhole
       - optparse-applicative
+      - network
+      - network-uri
+      - websockets
 
 tests:
   tasty:
