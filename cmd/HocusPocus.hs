@@ -6,44 +6,50 @@ module Main (main) where
 
 import Protolude
 
-import Options.Applicative
-  ( Parser
-  , ParserInfo
-  , command
-  , execParser
-  , header
-  , helper
-  , hsubparser
-  , fullDesc
-  , info
-  , progDesc
-  )
+import Network.URI (URI, parseURI)
+import qualified Options.Applicative as Opt
 
 
-newtype Options
+data Options
   = Options
   { cmd :: Command
+  , rendezvousServerURL :: URI
   } deriving (Eq, Show)
 
-optionsParser :: Parser Options
-optionsParser = Options <$> commandParser
+optionsParser :: Opt.Parser Options
+optionsParser
+  = Options
+  <$> commandParser
+  <*> Opt.option
+        (Opt.maybeReader parseURI)
+        ( Opt.long "rendezvous-url" <>
+          Opt.help "Endpoint for the Rendezvous server" <>
+          Opt.value defaultRendezvousURL <>
+          Opt.showDefault )
+  where
+    -- | Default URI for rendezvous server.
+    --
+    -- This is Brian Warner's personal server.
+    defaultRendezvousURL = mustParseURI "ws://relay.magic-wormhole.io:4000/v1"
+    mustParseURI uri = fromMaybe (panic . toS $ "Invalid URL: " <> uri) (parseURI uri)
 
 data Command
   = Send
   | Receive
   deriving (Eq, Show)
 
-commandParser :: Parser Command
-commandParser = hsubparser $
-  command "send" (info (pure Send) (progDesc "Send a text message, file, or directory")) <>
-  command "receive" (info (pure Receive) (progDesc "Receive a text message, file, or directory"))
+commandParser :: Opt.Parser Command
+commandParser = Opt.hsubparser $
+  Opt.command "send" (Opt.info (pure Send) (Opt.progDesc "Send a text message, file, or directory")) <>
+  Opt.command "receive" (Opt.info (pure Receive) (Opt.progDesc "Receive a text message, file, or directory"))
 
-makeOptions :: Text -> Parser a -> ParserInfo a
-makeOptions headerText parser = info (helper <*> parser) (fullDesc <> header (toS headerText))
+makeOptions :: Text -> Opt.Parser a -> Opt.ParserInfo a
+makeOptions headerText parser = Opt.info (Opt.helper <*> parser) (Opt.fullDesc <> Opt.header (toS headerText))
 
 main :: IO ()
 main = do
-  options <- execParser (makeOptions "hocus-pocus - summon and traverse magic wormholes" optionsParser)
+  options <- Opt.execParser (makeOptions "hocus-pocus - summon and traverse magic wormholes" optionsParser)
+  print $ rendezvousServerURL options
   case cmd options of
     -- XXX: What's the Protolude way of saying "print this as text"?
     Send -> putStrLn @Text "send"

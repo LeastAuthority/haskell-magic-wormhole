@@ -25,6 +25,7 @@ library
   ghc-options: -Wall
   build-depends:
       base
+    , network-uri
     , protolude
   exposed-modules:
       MagicWormhole
@@ -38,6 +39,7 @@ executable hocus-pocus
   ghc-options: -Wall
   build-depends:
       base
+    , network-uri
     , protolude
     , magic-wormhole
     , optparse-applicative
@@ -52,6 +54,7 @@ test-suite tasty
   ghc-options: -Wall
   build-depends:
       base
+    , network-uri
     , protolude
     , hedgehog
     , magic-wormhole
