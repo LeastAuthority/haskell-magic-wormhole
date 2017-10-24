@@ -75,8 +75,14 @@ instance FromJSON ServerMessage where
   parseJSON unknown = typeMismatch "Message" unknown
 
 instance ToJSON ServerMessage where
+  toJSON Welcome = object ["type" .= ("welcome" :: Text)]
   toJSON (Pong n) = object ["type" .= ("pong" :: Text), "pong" .= n]
-  toJSON _ = notImplemented
+  toJSON (Error errorMsg orig) =
+    object [ "type" .= ("error" :: Text)
+           , "error" .= toJSON errorMsg
+           , "orig" .= toJSON orig
+           ]
+  toJSON Ack = object ["type" .= ("ack" :: Text)]
 
 -- | A message sent from a rendezvous client to the server.
 data ClientMessage

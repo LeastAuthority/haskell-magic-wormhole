@@ -59,9 +59,13 @@ test-suite tasty
   build-depends:
       base
     , protolude
+    , aeson
     , hedgehog
     , magic-wormhole
     , tasty
     , tasty-hedgehog
     , tasty-hspec
+  other-modules:
+      Rendezvous
+      WebSockets
   default-language: Haskell2010
