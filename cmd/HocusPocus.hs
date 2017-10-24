@@ -6,11 +6,10 @@ module Main (main) where
 
 import Protolude
 
-import Network.Socket (withSocketsDo)
 import qualified Network.WebSockets as WS
 import qualified Options.Applicative as Opt
 
-import MagicWormhole.Internal.Rendezvous (Message(..), receiveMessage, wormholeRPC)
+import MagicWormhole.Internal.Rendezvous (Message(..), receiveMessage, wormholeRPC, runRendezvousClient)
 import MagicWormhole.Internal.WebSockets (WebSocketEndpoint(..), parseWebSocketEndpoint)
 
 data Options
@@ -64,5 +63,4 @@ app command conn = do
 main :: IO ()
 main = do
   options <- Opt.execParser (makeOptions "hocus-pocus - summon and traverse magic wormholes" optionsParser)
-  let WebSocketEndpoint host port path = rendezvousEndpoint options
-  withSocketsDo $ WS.runClient host port path (app (cmd options))
+  runRendezvousClient (rendezvousEndpoint options) (app (cmd options))

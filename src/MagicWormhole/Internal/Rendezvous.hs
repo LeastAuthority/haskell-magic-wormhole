@@ -3,6 +3,7 @@ module MagicWormhole.Internal.Rendezvous
   ( Message(..)
   , receiveMessage
   , wormholeRPC
+  , runRendezvousClient
   ) where
 
 import Protolude
@@ -20,7 +21,10 @@ import Data.Aeson
   )
 import Data.Aeson.Types (typeMismatch)
 import Data.String (String)
+import qualified Network.Socket as Socket
 import qualified Network.WebSockets as WS
+
+import MagicWormhole.Internal.WebSockets (WebSocketEndpoint(..))
 
 -- | A message that can be sent to or received from the server.
 --
@@ -96,3 +100,7 @@ wormholeRPC conn req = do
   -- XXX: Broken, because messages might arrive out of order.
   Right _ack <- receiveMessage conn  -- XXX: Partial match
   receiveMessage conn
+
+runRendezvousClient :: WebSocketEndpoint -> (WS.Connection -> IO ()) -> IO ()
+runRendezvousClient (WebSocketEndpoint host port path) app =
+  Socket.withSocketsDo $ WS.runClient host port path app

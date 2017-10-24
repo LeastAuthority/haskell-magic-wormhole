@@ -27,6 +27,7 @@ library
       base
     , protolude
     , aeson
+    , network
     , network-uri
     , websockets
   exposed-modules:
@@ -46,8 +47,6 @@ executable hocus-pocus
     , protolude
     , magic-wormhole
     , optparse-applicative
-    , network
-    , network-uri
     , websockets
   default-language: Haskell2010
 
