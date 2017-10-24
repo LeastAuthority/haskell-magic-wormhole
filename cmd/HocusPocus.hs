@@ -7,7 +7,16 @@ module Main (main) where
 import Protolude
 
 import Control.Monad (fail)
-import Data.Aeson (FromJSON(..), Value(Object), (.:), eitherDecode)
+import Data.Aeson
+  ( FromJSON(..)
+  , ToJSON(..)
+  , Value(Object)
+  , (.:)
+  , (.=)
+  , eitherDecode
+  , encode
+  , object
+  )
 import Data.Aeson.Types (typeMismatch)
 import Data.String (String)
 import Network.Socket (withSocketsDo)
@@ -95,10 +104,14 @@ makeOptions headerText parser = Opt.info (Opt.helper <*> parser) (Opt.fullDesc <
 --     PongMessage?
 --   * do we want to have different types for messages from server (e.g. Ack,
 --     Welcome, Pong) vs messages from client (e.g. Ping, Bind)?
+--   * do we want to (can we even?) structurally distinguish between messages that
+--     make sense outside the scope of a binding (e.g. ping) and messages that only
+--     make sense after a bind (e.g. allocate)
 data Message
   = Welcome
-  | Ping
-  | Pong
+  | Ping Int
+  | Pong Int
+  | Error { _errorMessage :: Text , _original :: Message }
   | Ack
   deriving (Eq, Show)
 
@@ -107,11 +120,17 @@ instance FromJSON Message where
     t <- v .: "type"
     case t of
       "welcome" -> pure Welcome
-      "ping" -> pure Ping
-      "pong" -> pure Pong
+      "ping" -> Ping <$> v .: "ping"
+      "pong" -> Pong <$> v .: "pong"
       "ack" -> pure Ack
-      _ -> fail $ "Unrecognized type: " <> t
+      "error" -> Error <$> v .: "error" <*> v .: "orig"
+      _ -> fail $ "Unrecognized wormhole message type: " <> t
   parseJSON unknown = typeMismatch "Message" unknown
+
+instance ToJSON Message where
+  toJSON (Ping n) = object ["type" .= ("ping" :: Text), "ping" .= n]
+  toJSON (Pong n) = object ["type" .= ("pong" :: Text), "pong" .= n]
+  toJSON _ = notImplemented
 
 -- | Execute 'Command' against a Wormhole Rendezvous server.
 app :: Command -> WS.ClientApp ()
@@ -120,12 +139,26 @@ app command conn = do
   -- XXX: Just block waiting for the server to tell us stuff. To be a proper
   -- client, we want to get stuff from the server and send stuff more or less
   -- simultaneously.
-  void $ forever $ do
-    message <- eitherDecode @Message <$> WS.receiveData conn
-    liftIO $ case message of
-      Left err -> putStrLn $ "ERROR: " <> err
-      -- XXX: What's `msg` in Protolude?
-      Right message' -> print message'
+  Right welcome <- receiveMessage conn
+  print welcome
+  sendMessage conn (Ping 5)
+  ack <- receiveMessage conn
+  print ack
+  pong <- receiveMessage conn
+  print pong
+
+-- | Receive a wormhole message from a websocket. Blocks until a message is received.
+-- Returns an error string if we cannot parse the message as a valid wormhole 'Message'.
+-- Throws exceptions if the underlying connection is closed or there is some error at the
+-- websocket level.
+receiveMessage :: WS.Connection -> IO (Either String Message)
+receiveMessage = map eitherDecode . WS.receiveData
+
+-- | Send a wormhole message to a websocket. Blocks until message is sent.
+-- Throws exceptions if the underlying connection is closed or there is some error at the
+-- websocket level.
+sendMessage :: WS.Connection -> Message -> IO ()
+sendMessage conn message = WS.sendBinaryData conn (encode message)
 
 main :: IO ()
 main = do
