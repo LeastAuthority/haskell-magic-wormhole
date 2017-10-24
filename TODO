@@ -1,0 +1,24 @@
+* DONE set up websocket stuff
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2017-10-24 Tue 11:39]
+:END:
+* DONE send wormhole ping & receive pong
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2017-10-24 Tue 11:39]
+:END:
+* TODO handle "welcome" message from server
+* TODO Set up logging (monad-logger)
+* TODO move code to library
+** MagicWormhole.Internal.Websocket
+** MagicWormhole.Internal.Rendezvous
+** MagicWormhole.Internal.Logging
+* TODO Write some tests
+** TODO Roundtripping parser tests
+* TODO Implement "send" against ad hoc 'wormhole receive'
+* TODO Try to write integration tests?
+** TODO Write Python client that can do non-interactive 'send' and 'receive'
+* TODO Publish Haddock of 'master'
+* TODO Implement 'receive'
+* TODO Instrument with Prometheus
+* TODO send & receive file (i.e. interact with transit server)
+* TODO Implement own rendezvous server?
