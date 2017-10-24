@@ -8,7 +8,10 @@
 :END:
 * TODO handle "welcome" message from server
 * TODO Set up logging (monad-logger)
-* TODO move code to library
+* DONE move code to library
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2017-10-24 Tue 12:58]
+:END:
 ** MagicWormhole.Internal.Websocket
 ** MagicWormhole.Internal.Rendezvous
 ** MagicWormhole.Internal.Logging
