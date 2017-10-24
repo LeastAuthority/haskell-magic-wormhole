@@ -141,17 +141,16 @@ app command conn = do
   -- simultaneously.
   Right welcome <- receiveMessage conn
   print welcome
-  sendMessage conn (Ping 5)
-  ack <- receiveMessage conn
-  print ack
-  pong <- receiveMessage conn
+  pong <- wormholeRPC conn (Ping 5)
   print pong
+
+type ParseError = String
 
 -- | Receive a wormhole message from a websocket. Blocks until a message is received.
 -- Returns an error string if we cannot parse the message as a valid wormhole 'Message'.
 -- Throws exceptions if the underlying connection is closed or there is some error at the
 -- websocket level.
-receiveMessage :: WS.Connection -> IO (Either String Message)
+receiveMessage :: WS.Connection -> IO (Either ParseError Message)
 receiveMessage = map eitherDecode . WS.receiveData
 
 -- | Send a wormhole message to a websocket. Blocks until message is sent.
@@ -159,6 +158,14 @@ receiveMessage = map eitherDecode . WS.receiveData
 -- websocket level.
 sendMessage :: WS.Connection -> Message -> IO ()
 sendMessage conn message = WS.sendBinaryData conn (encode message)
+
+-- | Make a request to the rendezvous server.
+wormholeRPC :: WS.Connection -> Message -> IO (Either ParseError Message)
+wormholeRPC conn req = do
+  sendMessage conn req
+  -- XXX: Broken, because messages might arrive out of order.
+  Right _ack <- receiveMessage conn  -- XXX: Partial match
+  receiveMessage conn
 
 main :: IO ()
 main = do
