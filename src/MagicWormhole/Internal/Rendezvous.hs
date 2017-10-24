@@ -1,9 +1,14 @@
 -- | Interactions with a Magic Wormhole Rendezvous server.
+--
+-- Intended to be imported qualified, e.g.
+-- ```
+-- import qualified MagicWormhole.Internal.Rendezvous as Rendezvous
+-- ```
 module MagicWormhole.Internal.Rendezvous
   ( Message(..)
-  , receiveMessage
-  , wormholeRPC
-  , runRendezvousClient
+  , receive
+  , rpc
+  , runClient
   ) where
 
 import Protolude
@@ -84,23 +89,23 @@ type ParseError = String
 -- Returns an error string if we cannot parse the message as a valid wormhole 'Message'.
 -- Throws exceptions if the underlying connection is closed or there is some error at the
 -- websocket level.
-receiveMessage :: WS.Connection -> IO (Either ParseError Message)
-receiveMessage = map eitherDecode . WS.receiveData
+receive :: WS.Connection -> IO (Either ParseError Message)
+receive = map eitherDecode . WS.receiveData
 
 -- | Send a wormhole message to a websocket. Blocks until message is sent.
 -- Throws exceptions if the underlying connection is closed or there is some error at the
 -- websocket level.
-sendMessage :: WS.Connection -> Message -> IO ()
-sendMessage conn message = WS.sendBinaryData conn (encode message)
+send :: WS.Connection -> Message -> IO ()
+send conn message = WS.sendBinaryData conn (encode message)
 
 -- | Make a request to the rendezvous server.
-wormholeRPC :: WS.Connection -> Message -> IO (Either ParseError Message)
-wormholeRPC conn req = do
-  sendMessage conn req
+rpc :: WS.Connection -> Message -> IO (Either ParseError Message)
+rpc conn req = do
+  send conn req
   -- XXX: Broken, because messages might arrive out of order.
-  Right _ack <- receiveMessage conn  -- XXX: Partial match
-  receiveMessage conn
+  Right _ack <- receive conn  -- XXX: Partial match
+  receive conn
 
-runRendezvousClient :: WebSocketEndpoint -> (WS.Connection -> IO ()) -> IO ()
-runRendezvousClient (WebSocketEndpoint host port path) app =
+runClient :: WebSocketEndpoint -> (WS.Connection -> IO ()) -> IO ()
+runClient (WebSocketEndpoint host port path) app =
   Socket.withSocketsDo $ WS.runClient host port path app

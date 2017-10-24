@@ -9,7 +9,7 @@ import Protolude
 import qualified Network.WebSockets as WS
 import qualified Options.Applicative as Opt
 
-import MagicWormhole.Internal.Rendezvous (Message(..), receiveMessage, wormholeRPC, runRendezvousClient)
+import qualified MagicWormhole.Internal.Rendezvous as Rendezvous
 import MagicWormhole.Internal.WebSockets (WebSocketEndpoint(..), parseWebSocketEndpoint)
 
 data Options
@@ -55,12 +55,12 @@ app command conn = do
   -- XXX: Just block waiting for the server to tell us stuff. To be a proper
   -- client, we want to get stuff from the server and send stuff more or less
   -- simultaneously.
-  Right welcome <- receiveMessage conn
+  Right welcome <- Rendezvous.receive conn
   print welcome
-  pong <- wormholeRPC conn (Ping 5)
+  pong <- Rendezvous.rpc conn (Rendezvous.Ping 5)
   print pong
 
 main :: IO ()
 main = do
   options <- Opt.execParser (makeOptions "hocus-pocus - summon and traverse magic wormholes" optionsParser)
-  runRendezvousClient (rendezvousEndpoint options) (app (cmd options))
+  Rendezvous.runClient (rendezvousEndpoint options) (app (cmd options))
