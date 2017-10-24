@@ -39,6 +39,7 @@ executable hocus-pocus
   build-depends:
       base
     , protolude
+    , aeson
     , magic-wormhole
     , optparse-applicative
     , network
