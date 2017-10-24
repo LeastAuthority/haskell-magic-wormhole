@@ -8,6 +8,7 @@ module MagicWormhole.Internal.Rendezvous
   ( Message(..)
   , receive
   , rpc
+  , Connection
   , runClient
   ) where
 
@@ -85,27 +86,30 @@ instance ToJSON Message where
 
 type ParseError = String
 
+-- | Connection to a Rendezvous server.
+newtype Connection = Conn { wsConn :: WS.Connection }
+
 -- | Receive a wormhole message from a websocket. Blocks until a message is received.
 -- Returns an error string if we cannot parse the message as a valid wormhole 'Message'.
 -- Throws exceptions if the underlying connection is closed or there is some error at the
 -- websocket level.
-receive :: WS.Connection -> IO (Either ParseError Message)
-receive = map eitherDecode . WS.receiveData
+receive :: Connection -> IO (Either ParseError Message)
+receive = map eitherDecode . WS.receiveData . wsConn
 
 -- | Send a wormhole message to a websocket. Blocks until message is sent.
 -- Throws exceptions if the underlying connection is closed or there is some error at the
 -- websocket level.
-send :: WS.Connection -> Message -> IO ()
-send conn message = WS.sendBinaryData conn (encode message)
+send :: Connection -> Message -> IO ()
+send (Conn conn) message = WS.sendBinaryData conn (encode message)
 
 -- | Make a request to the rendezvous server.
-rpc :: WS.Connection -> Message -> IO (Either ParseError Message)
+rpc :: Connection -> Message -> IO (Either ParseError Message)
 rpc conn req = do
   send conn req
   -- XXX: Broken, because messages might arrive out of order.
   Right _ack <- receive conn  -- XXX: Partial match
   receive conn
 
-runClient :: WebSocketEndpoint -> (WS.Connection -> IO ()) -> IO ()
+runClient :: WebSocketEndpoint -> (Connection -> IO ()) -> IO ()
 runClient (WebSocketEndpoint host port path) app =
-  Socket.withSocketsDo $ WS.runClient host port path app
+  Socket.withSocketsDo $ WS.runClient host port path (app . Conn)

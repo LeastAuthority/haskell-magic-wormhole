@@ -33,7 +33,6 @@ executables:
     dependencies:
       - magic-wormhole
       - optparse-applicative
-      - websockets
 
 tests:
   tasty:

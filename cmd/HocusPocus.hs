@@ -6,7 +6,6 @@ module Main (main) where
 
 import Protolude
 
-import qualified Network.WebSockets as WS
 import qualified Options.Applicative as Opt
 
 import qualified MagicWormhole.Internal.Rendezvous as Rendezvous
@@ -49,7 +48,7 @@ makeOptions :: Text -> Opt.Parser a -> Opt.ParserInfo a
 makeOptions headerText parser = Opt.info (Opt.helper <*> parser) (Opt.fullDesc <> Opt.header (toS headerText))
 
 -- | Execute 'Command' against a Wormhole Rendezvous server.
-app :: Command -> WS.ClientApp ()
+app :: Command -> Rendezvous.Connection -> IO ()
 app command conn = do
   print command
   -- XXX: Just block waiting for the server to tell us stuff. To be a proper
