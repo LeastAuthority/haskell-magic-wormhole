@@ -20,13 +20,16 @@ dependencies:
 
 library:
   source-dirs: src
+  dependencies:
+    - aeson
+    - network-uri
+    - websockets
 
 executables:
   hocus-pocus:
     main: HocusPocus.hs
     source-dirs: cmd
     dependencies:
-      - aeson
       - magic-wormhole
       - optparse-applicative
       - network

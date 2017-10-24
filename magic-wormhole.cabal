@@ -26,8 +26,13 @@ library
   build-depends:
       base
     , protolude
+    , aeson
+    , network-uri
+    , websockets
   exposed-modules:
       MagicWormhole
+      MagicWormhole.Internal.Rendezvous
+      MagicWormhole.Internal.WebSockets
   default-language: Haskell2010
 
 executable hocus-pocus
@@ -39,7 +44,6 @@ executable hocus-pocus
   build-depends:
       base
     , protolude
-    , aeson
     , magic-wormhole
     , optparse-applicative
     , network
