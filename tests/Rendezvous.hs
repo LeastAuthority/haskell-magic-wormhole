@@ -26,7 +26,7 @@ clientMessages = Ping <$> Gen.int (Range.linear (-1000) 1000)
 
 serverMessages :: MonadGen m => m ServerMessage
 serverMessages = Gen.choice
-  [ pure Welcome
+  [ Welcome <$> Gen.maybe (Gen.text (Range.linear 0 1024) Gen.unicode) <*> Gen.maybe (Gen.text (Range.linear 0 1024) Gen.unicode)
   , Pong <$> Gen.int (Range.linear (-1000) 1000)
   , Error <$> Gen.text (Range.linear 0 100) Gen.unicode <*> clientMessages
   , pure Ack

@@ -21,6 +21,7 @@ import Data.Aeson
   , ToJSON(..)
   , Value(Object)
   , (.:)
+  , (.:?)
   , (.=)
   , eitherDecode
   , encode
@@ -57,7 +58,7 @@ import MagicWormhole.Internal.WebSockets (WebSocketEndpoint(..))
 --     make sense outside the scope of a binding (e.g. ping) and messages that only
 --     make sense after a bind (e.g. allocate)
 data ServerMessage
-  = Welcome
+  = Welcome { motd :: Maybe Text, error :: Maybe Text }
   | Pong Int
   | Error { _errorMessage :: Text , _original :: ClientMessage }
   | Ack
@@ -67,7 +68,9 @@ instance FromJSON ServerMessage where
   parseJSON (Object v) = do
     t <- v .: "type"
     case t of
-      "welcome" -> pure Welcome
+      "welcome" -> do
+        welcome <- v .: "welcome"
+        Welcome <$> welcome .:? "motd" <*> welcome .:? "error"
       "pong" -> Pong <$> v .: "pong"
       "ack" -> pure Ack
       "error" -> Error <$> v .: "error" <*> v .: "orig"
@@ -75,7 +78,12 @@ instance FromJSON ServerMessage where
   parseJSON unknown = typeMismatch "Message" unknown
 
 instance ToJSON ServerMessage where
-  toJSON Welcome = object ["type" .= ("welcome" :: Text)]
+  toJSON (Welcome motd' error') =
+    object [ "type" .= toJSON ("welcome" :: Text)
+           , "welcome" .= object (catMaybes [ ("motd" .=) <$> motd'
+                                            , ("error" .=) <$> error'
+                                            ])
+           ]
   toJSON (Pong n) = object ["type" .= ("pong" :: Text), "pong" .= n]
   toJSON (Error errorMsg orig) =
     object [ "type" .= ("error" :: Text)
