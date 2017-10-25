@@ -9,7 +9,12 @@ import qualified Hedgehog.Range as Range
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.Hedgehog (testProperty)
 
-import MagicWormhole.Internal.Rendezvous (ClientMessage(..), ServerMessage(..))
+import MagicWormhole.Internal.Rendezvous
+  ( ClientMessage(..)
+  , ServerMessage(..)
+  , AppID(..)
+  , Side(..)
+  )
 
 tests :: IO TestTree
 tests = pure $ testGroup "Rendezvous"
@@ -22,7 +27,16 @@ tests = pure $ testGroup "Rendezvous"
   ]
 
 clientMessages :: MonadGen m => m ClientMessage
-clientMessages = Ping <$> Gen.int (Range.linear (-1000) 1000)
+clientMessages = Gen.choice
+  [ Ping <$> Gen.int (Range.linear (-1000) 1000)
+  , Bind <$> appIDs <*> sides
+  ]
+
+appIDs :: MonadGen m => m AppID
+appIDs = AppID <$> Gen.text (Range.linear 0 100) Gen.unicode
+
+sides :: MonadGen m => m Side
+sides = Side <$> Gen.text (Range.linear 0 10) Gen.hexit
 
 serverMessages :: MonadGen m => m ServerMessage
 serverMessages = Gen.choice

@@ -1,3 +1,4 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 -- | Interactions with a Magic Wormhole Rendezvous server.
 --
 -- Intended to be imported qualified, e.g.
@@ -14,6 +15,9 @@ module MagicWormhole.Internal.Rendezvous
   -- * Running a Rendezvous client
   , Connection
   , runClient
+  -- * Other
+  , AppID(..)
+  , Side(..)
   ) where
 
 import Protolude
@@ -97,19 +101,40 @@ instance ToJSON ServerMessage where
 
 -- | A message sent from a rendezvous client to the server.
 data ClientMessage
-  = Ping Int
+  = -- | Internal "ping". Response is 'Pong'. Used for testing.
+    Ping Int
+    -- | Set the application ID and the "side" for the duration of the connection.
+  | Bind AppID Side
   deriving (Eq, Show)
+
+-- | Short string to identify the application. Clients must use the same
+-- application ID if they wish to communicate with each other.
+--
+-- Recommendation is to use "$DNSNAME/$APPNAME", e.g.
+-- the Python `wormhole` command-line tool uses
+-- "lothar.com/wormhole/text-or-file-xfer".
+newtype AppID = AppID Text deriving (Eq, Show, FromJSON, ToJSON)
+
+-- | Short string used to differentiate between echoes of our own messages and
+-- real messages from other clients.
+newtype Side = Side Text deriving (Eq, Show, FromJSON, ToJSON)
 
 instance FromJSON ClientMessage where
   parseJSON (Object v) = do
     t <- v .: "type"
     case t of
       "ping" -> Ping <$> v .: "ping"
+      "bind" -> Bind <$> v .: "appid" <*> v .: "side"
       _ -> fail $ "Unrecognized rendezvous client message type: " <> t
   parseJSON unknown = typeMismatch "Message" unknown
 
 instance ToJSON ClientMessage where
   toJSON (Ping n) = object ["type" .= ("ping" :: Text), "ping" .= n]
+  toJSON (Bind appID side) =
+    object [ "type" .= ("bind" :: Text)
+           , "appid" .= appID
+           , "side" .= side
+           ]
 
 type ParseError = String
 
@@ -136,6 +161,17 @@ connect conn = do
     Right Welcome {errorMessage = Just errMsg} -> Left errMsg
     Right Welcome {errorMessage = Nothing} -> Right $ Conn conn
     Right unexpected -> Left $ "Unexpected message: " <> show unexpected
+
+bind :: WS.Connection -> AppID -> Side -> IO ()
+bind ws appID side = do
+  WS.sendBinaryData ws (encode (Bind appID side))
+  -- XXX: Broken, because messages might arrive out of order. How do we know
+  -- next message is ack?
+  response <- eitherDecode <$> WS.receiveData ws  -- XXX: Partial match
+  case response of
+    Right Ack -> pure ()
+    -- XXX: Need to handle this
+    _ -> notImplemented
 
 -- | Receive a wormhole message from a websocket. Blocks until a message is received.
 -- Returns an error string if we cannot parse the message as a valid wormhole 'Message'.
