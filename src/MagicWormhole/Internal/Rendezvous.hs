@@ -129,3 +129,30 @@ rpc conn req = do
 runClient :: WebSocketEndpoint -> (Connection -> IO ()) -> IO ()
 runClient (WebSocketEndpoint host port path) app =
   Socket.withSocketsDo $ WS.runClient host port path (app . Conn)
+
+
+-- TODO
+-- - get welcome
+--   - make 'welcome' its own type
+-- - if welcome fails, terminate connection
+-- - if welcome succeeds, store motd & continue
+-- - bind -> m (), then wait for ack
+-- - allocate -> m nameplace
+-- - claim nameplate -> m mailbox
+-- - open -> m ()
+--
+-- NOTES
+-- - "message" messages received do not include mailbox information,
+--   so we can only sensibly have one mailbox open
+-- - "bind" doesn't have a response, so we don't know when server is
+--   finished processing it. (jml thinks "ack" is sent immediately on receipt).
+-- - might want to put some state on the 'Connection' type
+_foo :: Connection -> IO ()
+_foo conn = do
+  -- XXX: Just block waiting for the server to tell us stuff. To be a proper
+  -- client, we want to get stuff from the server and send stuff more or less
+  -- simultaneously.
+  Right welcome <- receive conn
+  print welcome
+  pong <- rpc conn (Ping 5)
+  print pong
