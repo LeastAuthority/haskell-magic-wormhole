@@ -9,6 +9,9 @@ module MagicWormhole.Internal.Rendezvous
   , ServerMessage(..)
   , receive
   , rpc
+  -- * Specific RPCs
+  , ping
+  -- * Running a Rendezvous client
   , Connection
   , runClient
   ) where
@@ -129,10 +132,10 @@ connect :: WS.Connection -> IO (Either Text Connection)
 connect conn = do
   welcome <- eitherDecode <$> WS.receiveData conn
   pure $ case welcome of
-    Left parseError -> Left (toS parseError)
+    Left parseError -> Left $ toS parseError
     Right Welcome {errorMessage = Just errMsg} -> Left errMsg
-    Right Welcome {errorMessage = Nothing} -> Right (Conn conn)
-    Right unexpected -> Left ("Unexpected message: " <> show unexpected)
+    Right Welcome {errorMessage = Nothing} -> Right $ Conn conn
+    Right unexpected -> Left $ "Unexpected message: " <> show unexpected
 
 -- | Receive a wormhole message from a websocket. Blocks until a message is received.
 -- Returns an error string if we cannot parse the message as a valid wormhole 'Message'.
@@ -141,19 +144,30 @@ connect conn = do
 receive :: Connection -> IO (Either ParseError ServerMessage)
 receive = map eitherDecode . WS.receiveData . wsConn
 
--- | Send a wormhole message to a websocket. Blocks until message is sent.
--- Throws exceptions if the underlying connection is closed or there is some error at the
--- websocket level.
-send :: Connection -> ClientMessage -> IO ()
-send (Conn conn) message = WS.sendBinaryData conn (encode message)
-
 -- | Make a request to the rendezvous server.
 rpc :: Connection -> ClientMessage -> IO (Either ParseError ServerMessage)
 rpc conn req = do
-  send conn req
-  -- XXX: Broken, because messages might arrive out of order.
+  WS.sendBinaryData (wsConn conn) (encode req)
+  -- XXX: Broken, because messages might arrive out of order. How do we know
+  -- next message is ack?
   Right _ack <- receive conn  -- XXX: Partial match
+  -- XXX: Broken, for same reason. How do we know next message is response to request?
   receive conn
+
+-- | Ping the server.
+--
+-- This is an in-band ping, used mostly for testing. It is not necessary to
+-- keep the connection alive.
+ping :: Connection -> Int -> IO (Either ParseError Int)
+ping conn n = do
+  response <- rpc conn (Ping n)
+  -- XXX: Duplicated a lot with 'welcome'. Probably need a monad.
+  pure $ case response of
+    Left err -> Left err
+    -- XXX: Should we indicate that pong response differs from ping?
+    Right (Pong n') -> Right n'
+    -- XXX: Distinguish error types here
+    Right unexpected -> Left $ "Unexpected message: " <> show unexpected
 
 runClient :: WebSocketEndpoint -> (Connection -> IO a) -> IO a
 runClient (WebSocketEndpoint host port path) app =
@@ -164,10 +178,7 @@ runClient (WebSocketEndpoint host port path) app =
       Right conn -> app conn
 
 -- TODO
--- - get welcome
---   - make 'welcome' its own type
--- - if welcome fails, terminate connection
--- - if welcome succeeds, store motd & continue
+-- - use motd somehow
 -- - bind -> m (), then wait for ack
 -- - allocate -> m nameplace
 -- - claim nameplate -> m mailbox
@@ -179,12 +190,4 @@ runClient (WebSocketEndpoint host port path) app =
 -- - "bind" doesn't have a response, so we don't know when server is
 --   finished processing it. (jml thinks "ack" is sent immediately on receipt).
 -- - might want to put some state on the 'Connection' type
-_foo :: Connection -> IO ()
-_foo conn = do
-  -- XXX: Just block waiting for the server to tell us stuff. To be a proper
-  -- client, we want to get stuff from the server and send stuff more or less
-  -- simultaneously.
-  Right welcome <- receive conn
-  print welcome
-  pong <- rpc conn (Ping 5)
-  print pong
+-- - possibly create a separate "response" type?

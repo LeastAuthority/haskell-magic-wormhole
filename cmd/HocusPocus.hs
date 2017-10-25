@@ -51,10 +51,7 @@ makeOptions headerText parser = Opt.info (Opt.helper <*> parser) (Opt.fullDesc <
 app :: Command -> Rendezvous.Connection -> IO ()
 app command conn = do
   print command
-  -- XXX: Just block waiting for the server to tell us stuff. To be a proper
-  -- client, we want to get stuff from the server and send stuff more or less
-  -- simultaneously.
-  pong <- Rendezvous.rpc conn (Rendezvous.Ping 5)
+  pong <- Rendezvous.ping conn 5
   print pong
 
 main :: IO ()
