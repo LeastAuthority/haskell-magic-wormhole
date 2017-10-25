@@ -58,7 +58,7 @@ import MagicWormhole.Internal.WebSockets (WebSocketEndpoint(..))
 --     make sense outside the scope of a binding (e.g. ping) and messages that only
 --     make sense after a bind (e.g. allocate)
 data ServerMessage
-  = Welcome { motd :: Maybe Text, error :: Maybe Text }
+  = Welcome { motd :: Maybe Text, errorMessage :: Maybe Text }
   | Pong Int
   | Error { _errorMessage :: Text , _original :: ClientMessage }
   | Ack
@@ -113,6 +113,27 @@ type ParseError = String
 -- | Connection to a Rendezvous server.
 newtype Connection = Conn { wsConn :: WS.Connection }
 
+-- | Establish a Magic Wormhole connection.
+--
+-- Must be called as the first thing after opening a websocket connection to a
+-- Rendezvous server.
+--
+-- Receives the "welcome" message. If the message contains an error, returns
+-- that as Left, otherwise return a connection.
+--
+-- TODO: Also bind inside this.
+--
+-- TODO: Distinguish between parse error (server sent us non-welcome) and welcome error
+-- (server sent us a 'welcome' with an error in it).
+connect :: WS.Connection -> IO (Either Text Connection)
+connect conn = do
+  welcome <- eitherDecode <$> WS.receiveData conn
+  pure $ case welcome of
+    Left parseError -> Left (toS parseError)
+    Right Welcome {errorMessage = Just errMsg} -> Left errMsg
+    Right Welcome {errorMessage = Nothing} -> Right (Conn conn)
+    Right unexpected -> Left ("Unexpected message: " <> show unexpected)
+
 -- | Receive a wormhole message from a websocket. Blocks until a message is received.
 -- Returns an error string if we cannot parse the message as a valid wormhole 'Message'.
 -- Throws exceptions if the underlying connection is closed or there is some error at the
@@ -134,10 +155,13 @@ rpc conn req = do
   Right _ack <- receive conn  -- XXX: Partial match
   receive conn
 
-runClient :: WebSocketEndpoint -> (Connection -> IO ()) -> IO ()
+runClient :: WebSocketEndpoint -> (Connection -> IO a) -> IO a
 runClient (WebSocketEndpoint host port path) app =
-  Socket.withSocketsDo $ WS.runClient host port path (app . Conn)
-
+  Socket.withSocketsDo . WS.runClient host port path $ \ws -> do
+    conn' <- connect ws
+    case conn' of
+      Left _err -> notImplemented
+      Right conn -> app conn
 
 -- TODO
 -- - get welcome

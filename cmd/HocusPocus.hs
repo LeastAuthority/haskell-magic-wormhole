@@ -54,8 +54,6 @@ app command conn = do
   -- XXX: Just block waiting for the server to tell us stuff. To be a proper
   -- client, we want to get stuff from the server and send stuff more or less
   -- simultaneously.
-  Right welcome <- Rendezvous.receive conn
-  print welcome
   pong <- Rendezvous.rpc conn (Rendezvous.Ping 5)
   print pong
 
