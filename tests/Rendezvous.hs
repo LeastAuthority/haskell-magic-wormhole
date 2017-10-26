@@ -28,7 +28,7 @@ tests = pure $ testGroup "Rendezvous"
 
 clientMessages :: MonadGen m => m ClientMessage
 clientMessages = Gen.choice
-  [ Ping <$> Gen.int (Range.linear (-1000) 1000)
+  [ Ping <$> Gen.int Range.linearBounded
   , Bind <$> appIDs <*> sides
   ]
 
@@ -41,7 +41,7 @@ sides = Side <$> Gen.text (Range.linear 0 10) Gen.hexit
 serverMessages :: MonadGen m => m ServerMessage
 serverMessages = Gen.choice
   [ Welcome <$> Gen.maybe (Gen.text (Range.linear 0 1024) Gen.unicode) <*> Gen.maybe (Gen.text (Range.linear 0 1024) Gen.unicode)
-  , Pong <$> Gen.int (Range.linear (-1000) 1000)
+  , Pong <$> Gen.int Range.linearBounded
   , Error <$> Gen.text (Range.linear 0 100) Gen.unicode <*> clientMessages
   , pure Ack
   ]
