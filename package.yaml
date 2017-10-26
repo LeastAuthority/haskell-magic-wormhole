@@ -23,6 +23,7 @@ library:
   dependencies:
     - aeson
     - hashable
+    - memory
     - network
     - network-uri
     - websockets

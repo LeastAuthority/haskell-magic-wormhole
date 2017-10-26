@@ -28,6 +28,7 @@ library
     , protolude
     , aeson
     , hashable
+    , memory
     , network
     , network-uri
     , websockets

@@ -17,7 +17,12 @@ module MagicWormhole.Internal.Rendezvous
   , runClient
   -- * Other
   , AppID(..)
+  , MessageID(..)
   , Side(..)
+  , Phase(..)
+  , Body(..)
+  , Nameplate(..)
+  , Mailbox(..)
   ) where
 
 import Protolude
@@ -35,6 +40,7 @@ import Data.Aeson
   , object
   )
 import Data.Aeson.Types (typeMismatch)
+import Data.ByteArray.Encoding (convertFromBase, convertToBase, Base(Base16))
 import Data.Hashable (Hashable)
 import Data.String (String)
 import qualified Network.Socket as Socket
@@ -68,9 +74,15 @@ import MagicWormhole.Internal.WebSockets (WebSocketEndpoint(..))
 --     make sense after a bind (e.g. allocate)
 data ServerMessage
   = Welcome { motd :: Maybe Text, errorMessage :: Maybe Text }
+  | Nameplates { nameplates :: [Nameplate] }
+  | Allocated { nameplate :: Nameplate }
+  | Claimed { mailbox :: Mailbox }
+  | Released
+  | Message { side :: Side, phase :: Phase, messageID :: MessageID, body :: Body }
+  | Closed
+  | Ack
   | Pong Int
   | Error { _errorMessage :: Text , _original :: ClientMessage }
-  | Ack
   deriving (Eq, Show)
 
 instance FromJSON ServerMessage where
@@ -80,26 +92,81 @@ instance FromJSON ServerMessage where
       "welcome" -> do
         welcome <- v .: "welcome"
         Welcome <$> welcome .:? "motd" <*> welcome .:? "error"
-      "pong" -> Pong <$> v .: "pong"
+      "nameplates" -> do
+        ns <- v .: "nameplates"
+        Nameplates <$> sequence [ Nameplate <$> n .: "id" | n <- ns ]
+      "allocated" -> Allocated <$> v .: "nameplate"
+      "claimed" -> Claimed <$> v .: "mailbox"
+      "released" -> pure Released
+      "message" -> Message <$> v .: "side" <*> v .: "phase" <*> v .: "id" <*> v .: "body"
+      "closed" -> pure Closed
       "ack" -> pure Ack
+      "pong" -> Pong <$> v .: "pong"
       "error" -> Error <$> v .: "error" <*> v .: "orig"
       _ -> fail $ "Unrecognized wormhole message type: " <> t
   parseJSON unknown = typeMismatch "Message" unknown
 
 instance ToJSON ServerMessage where
   toJSON (Welcome motd' error') =
-    object [ "type" .= toJSON ("welcome" :: Text)
+    object [ "type" .= ("welcome" :: Text)
            , "welcome" .= object (catMaybes [ ("motd" .=) <$> motd'
                                             , ("error" .=) <$> error'
                                             ])
            ]
+  toJSON (Nameplates nameplates') =
+    object [ "type" .= ("nameplates" :: Text)
+           , "nameplates" .= [ object ["id" .= n] | n <- nameplates' ]
+           ]
+  toJSON (Allocated nameplate') =
+    object [ "type" .= ("allocated" :: Text)
+           , "nameplate" .= nameplate'
+           ]
+  toJSON (Claimed mailbox') =
+    object [ "type" .= ("claimed" :: Text)
+           , "mailbox" .= mailbox'
+           ]
+  toJSON Released = object ["type" .= ("released" :: Text)]
+  toJSON (Message side' phase' id body') =
+    object [ "type" .= ("message" :: Text)
+           , "phase" .= phase'
+           , "side" .= side'
+           , "body" .= body'
+           , "id" .= id
+           ]
+  toJSON Closed = object ["type" .= ("closed" :: Text)]
+  toJSON Ack = object ["type" .= ("ack" :: Text)]
   toJSON (Pong n) = object ["type" .= ("pong" :: Text), "pong" .= n]
   toJSON (Error errorMsg orig) =
     object [ "type" .= ("error" :: Text)
            , "error" .= errorMsg
            , "orig" .= orig
            ]
-  toJSON Ack = object ["type" .= ("ack" :: Text)]
+
+-- | Identifier for a "nameplate".
+--
+-- TODO: Explain what a nameplate is and how it's used.
+newtype Nameplate = Nameplate Text deriving (Eq, Show, ToJSON, FromJSON)
+
+-- | XXX: Placeholders
+newtype Phase = Phase Text deriving (Eq, Show, ToJSON, FromJSON)
+
+-- | Identifier for a mailbox.
+--
+-- TODO: Explain what a mailbox is and how it's used.
+newtype Mailbox = Mailbox Text deriving (Eq, Show, ToJSON, FromJSON)
+
+-- | The body of a magic wormhole message.
+--
+-- This can be any arbitrary bytestring that is sent to or received from a
+-- wormhole peer.
+newtype Body = Body ByteString deriving (Eq, Show)
+
+instance ToJSON Body where
+  toJSON (Body bytes) = toJSON (toS @ByteString @Text (convertToBase Base16 bytes))
+
+instance FromJSON Body where
+  parseJSON (String s) = either fail (pure . Body) (convertFromBase Base16 (toS @Text @ByteString s))
+  parseJSON x = typeMismatch "Body" x
 
 -- | A message sent from a rendezvous client to the server.
 data ClientMessage
@@ -132,10 +199,10 @@ instance FromJSON ClientMessage where
 
 instance ToJSON ClientMessage where
   toJSON (Ping n) = object ["type" .= ("ping" :: Text), "ping" .= n]
-  toJSON (Bind appID side) =
+  toJSON (Bind appID side') =
     object [ "type" .= ("bind" :: Text)
            , "appid" .= appID
-           , "side" .= side
+           , "side" .= side'
            ]
 
 type ParseError = String
@@ -179,8 +246,8 @@ connect conn = do
     Right unexpected -> Left $ "Unexpected message: " <> show unexpected
 
 bind :: WS.Connection -> AppID -> Side -> IO ()
-bind ws appID side = do
-  WS.sendBinaryData ws (encode (Bind appID side))
+bind ws appID side' = do
+  WS.sendBinaryData ws (encode (Bind appID side'))
   -- XXX: Broken, because messages might arrive out of order. How do we know
   -- next message is ack?
   response <- eitherDecode <$> WS.receiveData ws  -- XXX: Partial match
@@ -222,13 +289,13 @@ ping conn n = do
     Right unexpected -> Left $ "Unexpected message: " <> show unexpected
 
 runClient :: WebSocketEndpoint -> AppID -> Side -> (Connection -> IO a) -> IO a
-runClient (WebSocketEndpoint host port path) appID side app =
+runClient (WebSocketEndpoint host port path) appID side' app =
   Socket.withSocketsDo . WS.runClient host port path $ \ws -> do
     conn' <- connect ws
     case conn' of
       Left _err -> notImplemented -- XXX: Welcome failed
       Right conn -> do
-        bind ws appID side
+        bind ws appID side'
         app conn
 
 -- TODO
