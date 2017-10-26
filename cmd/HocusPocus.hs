@@ -57,4 +57,4 @@ app command conn = do
 main :: IO ()
 main = do
   options <- Opt.execParser (makeOptions "hocus-pocus - summon and traverse magic wormholes" optionsParser)
-  Rendezvous.runClient (rendezvousEndpoint options) (app (cmd options))
+  Rendezvous.runClient (rendezvousEndpoint options) (Rendezvous.AppID "jml.io/hocus-pocus") (Rendezvous.Side "treebeard") (app (cmd options))

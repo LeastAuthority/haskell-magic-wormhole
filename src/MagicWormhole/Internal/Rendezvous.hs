@@ -205,13 +205,15 @@ ping conn n = do
     -- XXX: Distinguish error types here
     Right unexpected -> Left $ "Unexpected message: " <> show unexpected
 
-runClient :: WebSocketEndpoint -> (Connection -> IO a) -> IO a
-runClient (WebSocketEndpoint host port path) app =
+runClient :: WebSocketEndpoint -> AppID -> Side -> (Connection -> IO a) -> IO a
+runClient (WebSocketEndpoint host port path) appID side app =
   Socket.withSocketsDo . WS.runClient host port path $ \ws -> do
     conn' <- connect ws
     case conn' of
-      Left _err -> notImplemented
-      Right conn -> app conn
+      Left _err -> notImplemented -- XXX: Welcome failed
+      Right conn -> do
+        bind ws appID side
+        app conn
 
 -- TODO
 -- - use motd somehow
