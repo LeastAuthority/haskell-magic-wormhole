@@ -26,7 +26,7 @@ import Control.Monad (fail)
 import Data.Aeson
   ( FromJSON(..)
   , ToJSON(..)
-  , Value(Object)
+  , Value(Object, String)
   , (.:)
   , (.:?)
   , (.=)
@@ -35,9 +35,11 @@ import Data.Aeson
   , object
   )
 import Data.Aeson.Types (typeMismatch)
+import Data.Hashable (Hashable)
 import Data.String (String)
 import qualified Network.Socket as Socket
 import qualified Network.WebSockets as WS
+import Numeric (readHex, showHex)
 
 import MagicWormhole.Internal.WebSockets (WebSocketEndpoint(..))
 
@@ -137,6 +139,20 @@ instance ToJSON ClientMessage where
            ]
 
 type ParseError = String
+
+-- | Identifier sent with every client message that is included in the
+-- matching server responses.
+newtype MessageID = MessageID Int16 deriving (Eq, Show, Hashable)
+
+instance ToJSON MessageID where
+  toJSON (MessageID n) = toJSON $ showHex n ""
+
+instance FromJSON MessageID where
+  parseJSON (String s) =
+    case readHex (toS s) of
+      [(n, _)] -> pure (MessageID n)
+      _ -> fail $ "Could not parse MessageID: " <> toS s
+  parseJSON unknown = typeMismatch "MessageID" unknown
 
 -- | Connection to a Rendezvous server.
 newtype Connection = Conn { wsConn :: WS.Connection }
