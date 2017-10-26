@@ -176,18 +176,6 @@ data ClientMessage
   | Bind AppID Side
   deriving (Eq, Show)
 
--- | Short string to identify the application. Clients must use the same
--- application ID if they wish to communicate with each other.
---
--- Recommendation is to use "$DNSNAME/$APPNAME", e.g.
--- the Python `wormhole` command-line tool uses
--- "lothar.com/wormhole/text-or-file-xfer".
-newtype AppID = AppID Text deriving (Eq, Show, FromJSON, ToJSON)
-
--- | Short string used to differentiate between echoes of our own messages and
--- real messages from other clients.
-newtype Side = Side Text deriving (Eq, Show, FromJSON, ToJSON)
-
 instance FromJSON ClientMessage where
   parseJSON (Object v) = do
     t <- v .: "type"
@@ -204,6 +192,18 @@ instance ToJSON ClientMessage where
            , "appid" .= appID
            , "side" .= side'
            ]
+
+-- | Short string to identify the application. Clients must use the same
+-- application ID if they wish to communicate with each other.
+--
+-- Recommendation is to use "$DNSNAME/$APPNAME", e.g.
+-- the Python `wormhole` command-line tool uses
+-- "lothar.com/wormhole/text-or-file-xfer".
+newtype AppID = AppID Text deriving (Eq, Show, FromJSON, ToJSON)
+
+-- | Short string used to differentiate between echoes of our own messages and
+-- real messages from other clients.
+newtype Side = Side Text deriving (Eq, Show, FromJSON, ToJSON)
 
 type ParseError = String
 
