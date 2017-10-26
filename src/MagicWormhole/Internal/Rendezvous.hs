@@ -79,8 +79,8 @@ instance ToJSON ServerMessage where
   toJSON (Pong n) = object ["type" .= ("pong" :: Text), "pong" .= n]
   toJSON (Error errorMsg orig) =
     object [ "type" .= ("error" :: Text)
-           , "error" .= toJSON errorMsg
-           , "orig" .= toJSON orig
+           , "error" .= errorMsg
+           , "orig" .= orig
            ]
   toJSON Ack = object ["type" .= ("ack" :: Text)]
 
@@ -99,7 +99,6 @@ instance FromJSON ClientMessage where
 
 instance ToJSON ClientMessage where
   toJSON (Ping n) = object ["type" .= ("ping" :: Text), "ping" .= n]
-
 
 type ParseError = String
 

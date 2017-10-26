@@ -3,7 +3,6 @@ module Main (main) where
 import Protolude
 
 import Test.Tasty (defaultMain, testGroup)
-import Test.Tasty.Hedgehog (testProperty)
 
 import qualified Rendezvous
 import qualified WebSockets
