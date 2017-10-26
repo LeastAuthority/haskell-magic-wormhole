@@ -23,6 +23,7 @@ module MagicWormhole.Internal.Rendezvous
   , Body(..)
   , Nameplate(..)
   , Mailbox(..)
+  , Mood(..)
   ) where
 
 import Protolude
@@ -39,7 +40,7 @@ import Data.Aeson
   , encode
   , object
   )
-import Data.Aeson.Types (typeMismatch)
+import Data.Aeson.Types (Pair, typeMismatch)
 import Data.ByteArray.Encoding (convertFromBase, convertToBase, Base(Base16))
 import Data.Hashable (Hashable)
 import Data.String (String)
@@ -108,39 +109,36 @@ instance FromJSON ServerMessage where
 
 instance ToJSON ServerMessage where
   toJSON (Welcome motd' error') =
-    object [ "type" .= ("welcome" :: Text)
-           , "welcome" .= object (catMaybes [ ("motd" .=) <$> motd'
-                                            , ("error" .=) <$> error'
-                                            ])
-           ]
+    objectWithType "welcome"
+    [ "welcome" .= object (catMaybes [ ("motd" .=) <$> motd'
+                                     , ("error" .=) <$> error'
+                                     ])
+    ]
   toJSON (Nameplates nameplates') =
-    object [ "type" .= ("nameplates" :: Text)
-           , "nameplates" .= [ object ["id" .= n] | n <- nameplates' ]
-           ]
+    objectWithType "nameplates" ["nameplates" .= [ object ["id" .= n] | n <- nameplates' ] ]
   toJSON (Allocated nameplate') =
-    object [ "type" .= ("allocated" :: Text)
-           , "nameplate" .= nameplate'
-           ]
+    objectWithType "allocated" [ "nameplate" .= nameplate' ]
   toJSON (Claimed mailbox') =
-    object [ "type" .= ("claimed" :: Text)
-           , "mailbox" .= mailbox'
-           ]
-  toJSON Released = object ["type" .= ("released" :: Text)]
+    objectWithType "claimed" [ "mailbox" .= mailbox' ]
+  toJSON Released = objectWithType "released" []
   toJSON (Message side' phase' id body') =
-    object [ "type" .= ("message" :: Text)
-           , "phase" .= phase'
-           , "side" .= side'
-           , "body" .= body'
-           , "id" .= id
-           ]
-  toJSON Closed = object ["type" .= ("closed" :: Text)]
-  toJSON Ack = object ["type" .= ("ack" :: Text)]
-  toJSON (Pong n) = object ["type" .= ("pong" :: Text), "pong" .= n]
+    objectWithType "message"
+    [ "phase" .= phase'
+    , "side" .= side'
+    , "body" .= body'
+    , "id" .= id
+    ]
+  toJSON Closed = objectWithType "closed" []
+  toJSON Ack = objectWithType "ack" []
+  toJSON (Pong n) = objectWithType "pong" ["pong" .= n]
   toJSON (Error errorMsg orig) =
-    object [ "type" .= ("error" :: Text)
-           , "error" .= errorMsg
-           , "orig" .= orig
-           ]
+    objectWithType "error" [ "error" .= errorMsg
+                           , "orig" .= orig
+                           ]
+
+-- | Create a JSON object with a "type" field.
+objectWithType :: Text -> [Pair] -> Value
+objectWithType typ pairs = object $ ("type" .= typ):pairs
 
 -- | Identifier for a "nameplate".
 --
@@ -170,28 +168,59 @@ instance FromJSON Body where
 
 -- | A message sent from a rendezvous client to the server.
 data ClientMessage
-  = -- | Internal "ping". Response is 'Pong'. Used for testing.
-    Ping Int
-    -- | Set the application ID and the "side" for the duration of the connection.
-  | Bind AppID Side
+  = -- | Set the application ID and the "side" for the duration of the connection.
+    Bind AppID Side
+    -- | Get a list of all allocated nameplates.
+  | List
+    -- | Ask the server to allocate a nameplate
+  | Allocate
+    -- | Claim a nameplate.
+  | Claim Nameplate
+    -- | Release a claimed nameplate.
+    -- XXX: What are the semantics of not specifying this?
+  | Release (Maybe Nameplate)
+    -- | Open a mailbox.
+  | Open Mailbox
+    -- | Close a mailbox. Since only one mailbox can be open at a time, if
+    -- mailbox isn't specified, then close the open mailbox.
+  | Close (Maybe Mailbox) (Maybe Mood)
+    -- | Internal "ping". Response is 'Pong'. Used for testing.
+  | Ping Int
   deriving (Eq, Show)
 
 instance FromJSON ClientMessage where
   parseJSON (Object v) = do
     t <- v .: "type"
     case t of
-      "ping" -> Ping <$> v .: "ping"
       "bind" -> Bind <$> v .: "appid" <*> v .: "side"
+      "list" -> pure List
+      "allocate" -> pure Allocate
+      "claim" -> Claim <$> v .: "nameplate"
+      "release" -> Release <$> v .:? "nameplate"
+      "open" -> Open <$> v .: "mailbox"
+      "close" -> Close <$> v .:? "mailbox" <*> v .:? "mood"
+      "ping" -> Ping <$> v .: "ping"
       _ -> fail $ "Unrecognized rendezvous client message type: " <> t
   parseJSON unknown = typeMismatch "Message" unknown
 
 instance ToJSON ClientMessage where
-  toJSON (Ping n) = object ["type" .= ("ping" :: Text), "ping" .= n]
   toJSON (Bind appID side') =
-    object [ "type" .= ("bind" :: Text)
-           , "appid" .= appID
-           , "side" .= side'
-           ]
+    objectWithType "bind"  [ "appid" .= appID
+                           , "side" .= side'
+                           ]
+  toJSON List = objectWithType "list" []
+  toJSON Allocate = objectWithType "allocate" []
+  toJSON (Claim nameplate') = objectWithType "claim" [ "nameplate" .= nameplate' ]
+  toJSON (Release nameplate') =
+    objectWithType "release" $ case nameplate' of
+                                 Nothing -> []
+                                 Just n -> ["nameplate" .= n]
+  toJSON (Open mailbox') = objectWithType "open" [ "mailbox" .= mailbox' ]
+  toJSON (Close mailbox' mood') =
+    objectWithType "close" $ catMaybes [ ("mailbox" .=) <$> mailbox'
+                                       , ("mood" .=) <$> mood'
+                                       ]
+  toJSON (Ping n) = objectWithType "ping" [ "ping" .= n]
 
 -- | Short string to identify the application. Clients must use the same
 -- application ID if they wish to communicate with each other.
@@ -204,6 +233,24 @@ newtype AppID = AppID Text deriving (Eq, Show, FromJSON, ToJSON)
 -- | Short string used to differentiate between echoes of our own messages and
 -- real messages from other clients.
 newtype Side = Side Text deriving (Eq, Show, FromJSON, ToJSON)
+
+data Mood = Happy | Lonely | Scary | Errory deriving (Eq, Show)
+
+instance ToJSON Mood where
+  toJSON Happy = "happy"
+  toJSON Lonely = "lonely"
+  toJSON Scary = "scary"
+  toJSON Errory = "errory"
+
+instance FromJSON Mood where
+  parseJSON (String s) =
+    case s of
+      "happy" -> pure Happy
+      "lonely" -> pure Lonely
+      "scary" -> pure Scary
+      "errory" -> pure Errory
+      _ -> fail $ "Unrecognized mood: " <> toS s
+  parseJSON unknown = typeMismatch "Mood" unknown
 
 type ParseError = String
 

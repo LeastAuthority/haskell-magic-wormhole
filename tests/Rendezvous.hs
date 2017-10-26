@@ -19,6 +19,7 @@ import MagicWormhole.Internal.Rendezvous
   , Body(..)
   , Nameplate(..)
   , Mailbox(..)
+  , Mood(..)
   )
 
 tests :: IO TestTree
@@ -33,8 +34,14 @@ tests = pure $ testGroup "Rendezvous"
 
 clientMessages :: MonadGen m => m ClientMessage
 clientMessages = Gen.choice
-  [ Ping <$> Gen.int Range.linearBounded
-  , Bind <$> appIDs <*> sides
+  [ Bind <$> appIDs <*> sides
+  , pure List
+  , pure Allocate
+  , Claim <$> genNameplates
+  , Release <$> Gen.maybe genNameplates
+  , Open <$> mailboxes
+  , Close <$> Gen.maybe mailboxes <*> Gen.maybe moods
+  , Ping <$> Gen.int Range.linearBounded
   ]
 
 messageIDs :: MonadGen m => m MessageID
@@ -57,6 +64,9 @@ genNameplates = Nameplate <$> Gen.text (Range.linear 0 10) Gen.unicode
 
 mailboxes :: MonadGen m => m Mailbox
 mailboxes = Mailbox <$> Gen.text (Range.linear 0 20) Gen.unicode  -- XXX: Probably wrong.
+
+moods :: MonadGen m => m Mood
+moods = Gen.element [ Happy, Lonely, Scary, Errory ]
 
 serverMessages :: MonadGen m => m ServerMessage
 serverMessages = Gen.choice
