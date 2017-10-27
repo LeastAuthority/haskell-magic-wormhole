@@ -1,3 +1,4 @@
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 -- | Interactions with a Magic Wormhole Rendezvous server.
 --
@@ -28,6 +29,17 @@ module MagicWormhole.Internal.Rendezvous
 
 import Protolude
 
+import Control.Concurrent.STM
+  ( TVar
+  , newTVar
+  , modifyTVar'
+  , readTVar
+  , writeTVar
+  , TMVar
+  , newEmptyTMVar
+  , putTMVar
+  , takeTMVar
+  )
 import Control.Monad (fail)
 import Data.Aeson
   ( FromJSON(..)
@@ -43,6 +55,8 @@ import Data.Aeson
 import Data.Aeson.Types (Pair, typeMismatch)
 import Data.ByteArray.Encoding (convertFromBase, convertToBase, Base(Base16))
 import Data.Hashable (Hashable)
+import Data.HashMap.Lazy (HashMap)
+import qualified Data.HashMap.Lazy as HashMap
 import Data.String (String)
 import qualified Network.Socket as Socket
 import qualified Network.WebSockets as WS
@@ -137,6 +151,8 @@ instance ToJSON ServerMessage where
                            ]
 
 -- | Create a JSON object with a "type" field.
+--
+-- Use this to construct objects for client and server messages.
 objectWithType :: Text -> [Pair] -> Value
 objectWithType typ pairs = object $ ("type" .= typ):pairs
 
@@ -165,6 +181,14 @@ instance ToJSON Body where
 instance FromJSON Body where
   parseJSON (String s) = either fail (pure . Body) (convertFromBase Base16 (toS @Text @ByteString s))
   parseJSON x = typeMismatch "Body" x
+
+-- | The type of a response.
+--
+-- This is used pretty much only to match responses with requests.
+--
+-- TODO: Make this a sum type?
+-- TODO: Duplication with ServerMessage?
+type ResponseType = Text
 
 -- | A message sent from a rendezvous client to the server.
 data ClientMessage
@@ -269,7 +293,121 @@ instance FromJSON MessageID where
   parseJSON unknown = typeMismatch "MessageID" unknown
 
 -- | Connection to a Rendezvous server.
-newtype Connection = Conn { wsConn :: WS.Connection }
+data Connection
+  = Conn
+  { -- | Underlying websocket connection
+    wsConn :: WS.Connection
+  , -- | Responses that we are waiting for from the server.
+    --
+    -- If there is an entry in this map for a response type, that means
+    -- we've made a request that expects the given response.
+    --
+    -- When the response is received, we populate the TMVar. Then the function
+    -- that made the request unblocks, uses the value, and updates the map.
+    --
+    -- XXX: Could abstronaut this away, making ResponseType and ServerMessage
+    -- both type variables, and instead implementing something that just
+    -- matches requests with responses and shoves unmatched ones to a channel.
+    pendingVar :: TVar (HashMap ResponseType (TMVar ServerMessage))
+  }
+
+newConnection :: WS.Connection -> STM Connection
+newConnection ws = do
+  pendingVar' <- newTVar mempty
+  pure Conn { wsConn = ws, pendingVar = pendingVar' }
+
+-- | Error caused by misusing the client.
+data ClientError
+  = -- | We tried to do an RPC while another RPC with the same response type
+    -- was in flight. See warner/magic-wormhole#260 for details.
+    AlreadySent ResponseType
+    -- | Tried to send a non-RPC as if it were an RPC (i.e. expecting a response).
+  | NotAnRPC ClientMessage
+  deriving (Eq, Show)
+
+expectResponse :: Connection -> ResponseType -> STM (Either ClientError (TMVar ServerMessage))
+expectResponse Conn{pendingVar} responseType = do
+  pending <- readTVar pendingVar
+  case HashMap.lookup responseType pending of
+    Nothing -> do
+      box <- newEmptyTMVar
+      writeTVar pendingVar (HashMap.insert responseType box pending)
+      pure (Right box)
+    Just _ -> pure (Left (AlreadySent responseType))
+
+-- | Error due to weirdness from the server.
+data ServerError
+  = UnrecognizedResponse ServerMessage
+  | ResponseWithoutRequest ServerMessage
+  | ParseError String
+  deriving (Eq, Show)
+
+gotResponse :: Connection -> ResponseType -> ServerMessage -> STM (Maybe ServerError)
+gotResponse Conn{pendingVar} responseType message = do
+  pending <- readTVar pendingVar
+  case HashMap.lookup responseType pending of
+    Nothing -> pure (Just (ResponseWithoutRequest message))
+    Just box -> do
+      putTMVar box message  -- XXX: This will block (retry the transaction) if already populated. I don't think that's what we want.
+      pure Nothing
+
+-- XXX: This expectResponse / getResponseType stuff feels off to me.
+-- I think we could do something better.
+-- e.g.
+-- - use an enum for ResponseType
+-- - embed the response type in the ServerMessage value so we don't need to "specify" it twice
+--   (once in the parser, once here)
+-- - change the structure to have stricter types?
+--   rather than a map of a type value to generic response box, have one box for each
+--   request/response pair?
+
+expectedResponse :: ClientMessage -> Maybe ResponseType
+expectedResponse Bind{} = Nothing
+expectedResponse List = Just "nameplates"
+expectedResponse Allocate = Just "allocated"
+expectedResponse Claim{} = Just "claimed"
+expectedResponse Release{} = Just "released"
+expectedResponse Open{} = Nothing
+expectedResponse Close{} = Just "closed"
+expectedResponse Ping{} = Just "pong"
+
+getResponseType :: ServerMessage -> Maybe ResponseType
+getResponseType Welcome{} = Nothing
+getResponseType Nameplates{} = Just "nameplates"
+getResponseType Allocated{} = Just "allocated"
+getResponseType Claimed{} = Just "claimed"
+getResponseType Released = Just "released"
+getResponseType Message{} = Nothing
+getResponseType Closed = Just "closed"
+getResponseType Ack = Nothing
+getResponseType Pong{} = Just "pong"
+getResponseType Error{} = Nothing -- XXX: Alternatively, get the response type of the original message?
+
+runClient :: WebSocketEndpoint -> AppID -> Side -> (Connection -> IO a) -> IO a
+runClient (WebSocketEndpoint host port path) appID side' app =
+  Socket.withSocketsDo . WS.runClient host port path $ \ws -> do
+    conn' <- connect ws
+    case conn' of
+      Left _err -> notImplemented -- XXX: Welcome failed
+      Right conn -> do
+        bind conn appID side'
+        withAsync (forever (void (readMessage conn))) (\_ -> app conn)
+
+readMessage :: Connection -> IO (Maybe ServerError)
+readMessage conn = do
+  msg' <- eitherDecode <$> WS.receiveData (wsConn conn)
+  case msg' of
+    Left parseError -> pure (Just (ParseError parseError))
+    Right msg ->
+      case getResponseType msg of
+        Nothing ->
+          case msg of
+            Ack -> pure Nothing  -- Skip Ack, because there's no point in handling it.
+            Welcome{} -> notImplemented -- XXX: Not sure how to handle this?
+            Error{} -> notImplemented -- XXX: Need a plan for handling errors
+            _ -> panic $ "Impossible code. No response type for " <> show msg  -- XXX: Pretty sure we can design this away.
+        Just responseType ->
+          atomically $ gotResponse conn responseType msg
 
 -- | Establish a Magic Wormhole connection.
 --
@@ -286,22 +424,11 @@ newtype Connection = Conn { wsConn :: WS.Connection }
 connect :: WS.Connection -> IO (Either Text Connection)
 connect conn = do
   welcome <- eitherDecode <$> WS.receiveData conn
-  pure $ case welcome of
-    Left parseError -> Left $ toS parseError
-    Right Welcome {errorMessage = Just errMsg} -> Left errMsg
-    Right Welcome {errorMessage = Nothing} -> Right $ Conn conn
-    Right unexpected -> Left $ "Unexpected message: " <> show unexpected
-
-bind :: WS.Connection -> AppID -> Side -> IO ()
-bind ws appID side' = do
-  WS.sendBinaryData ws (encode (Bind appID side'))
-  -- XXX: Broken, because messages might arrive out of order. How do we know
-  -- next message is ack?
-  response <- eitherDecode <$> WS.receiveData ws  -- XXX: Partial match
-  case response of
-    Right Ack -> pure ()
-    -- XXX: Need to handle this
-    _ -> notImplemented
+  case welcome of
+    Left parseError -> pure . Left $ toS parseError
+    Right Welcome {errorMessage = Just errMsg} -> pure . Left $ errMsg
+    Right Welcome {errorMessage = Nothing} -> Right <$> atomically (newConnection conn)
+    Right unexpected -> pure . Left $ "Unexpected message: " <> show unexpected
 
 -- | Receive a wormhole message from a websocket. Blocks until a message is received.
 -- Returns an error string if we cannot parse the message as a valid wormhole 'Message'.
@@ -310,21 +437,43 @@ bind ws appID side' = do
 receive :: Connection -> IO (Either ParseError ServerMessage)
 receive = map eitherDecode . WS.receiveData . wsConn
 
+data RendezvousError = ClientError ClientError | ServerError ServerError deriving (Eq, Show)
+
+-- | Send a message to the Rendezvous server that we don't expect a response for.
+send :: Connection -> ClientMessage -> IO ()
+send conn req = WS.sendBinaryData (wsConn conn) (encode req)
+
 -- | Make a request to the rendezvous server.
-rpc :: Connection -> ClientMessage -> IO (Either ParseError ServerMessage)
-rpc conn req = do
-  WS.sendBinaryData (wsConn conn) (encode req)
-  -- XXX: Broken, because messages might arrive out of order. How do we know
-  -- next message is ack?
-  Right _ack <- receive conn  -- XXX: Partial match
-  -- XXX: Broken, for same reason. How do we know next message is response to request?
-  receive conn
+rpc :: Connection -> ClientMessage -> IO (Either RendezvousError ServerMessage)
+rpc conn req =
+  case expectedResponse req of
+    Nothing ->
+      -- TODO: Pretty sure we can juggle things around at the type level
+      -- to remove this check. (i.e. make a type for RPC requests).
+      pure (Left (ClientError (NotAnRPC req)))
+    Just responseType -> do
+      box' <- atomically $ expectResponse conn responseType
+      case box' of
+        -- XXX: There's probably something clever we can do with the Left ->
+        -- Left, Right -> Right symmetry here.
+        Left clientError -> pure (Left (ClientError clientError))
+        Right box -> do
+          send conn req
+          response <- atomically $ do
+            -- XXX: Make this its own function
+            response <- takeTMVar box
+            modifyTVar' (pendingVar conn) (HashMap.delete responseType)
+            pure response
+          pure (Right response)
+
+bind :: Connection -> AppID -> Side -> IO ()
+bind conn appID side' = send conn (Bind appID side')
 
 -- | Ping the server.
 --
 -- This is an in-band ping, used mostly for testing. It is not necessary to
 -- keep the connection alive.
-ping :: Connection -> Int -> IO (Either ParseError Int)
+ping :: Connection -> Int -> IO (Either RendezvousError Int)
 ping conn n = do
   response <- rpc conn (Ping n)
   -- XXX: Duplicated a lot with 'welcome'. Probably need a monad.
@@ -332,22 +481,14 @@ ping conn n = do
     Left err -> Left err
     -- XXX: Should we indicate that pong response differs from ping?
     Right (Pong n') -> Right n'
-    -- XXX: Distinguish error types here
-    Right unexpected -> Left $ "Unexpected message: " <> show unexpected
+    Right unexpected ->
+      -- XXX: Panic is OK because this shouldn't be possible.
+      -- We should be able to refactor though.
+      panic $ "Unexpected message: " <> show unexpected
 
-runClient :: WebSocketEndpoint -> AppID -> Side -> (Connection -> IO a) -> IO a
-runClient (WebSocketEndpoint host port path) appID side' app =
-  Socket.withSocketsDo . WS.runClient host port path $ \ws -> do
-    conn' <- connect ws
-    case conn' of
-      Left _err -> notImplemented -- XXX: Welcome failed
-      Right conn -> do
-        bind ws appID side'
-        app conn
 
 -- TODO
 -- - use motd somehow
--- - bind -> m (), then wait for ack
 -- - allocate -> m nameplace
 -- - claim nameplate -> m mailbox
 -- - open -> m ()

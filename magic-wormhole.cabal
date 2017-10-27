@@ -31,6 +31,8 @@ library
     , memory
     , network
     , network-uri
+    , stm
+    , unordered-containers
     , websockets
   exposed-modules:
       MagicWormhole.Internal.Rendezvous

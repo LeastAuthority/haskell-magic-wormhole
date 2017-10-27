@@ -26,6 +26,8 @@ library:
     - memory
     - network
     - network-uri
+    - stm
+    - unordered-containers
     - websockets
 
 executables:
