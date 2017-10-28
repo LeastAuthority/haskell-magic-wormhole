@@ -221,14 +221,6 @@ instance FromJSON Body where
   parseJSON (String s) = either fail (pure . Body) (convertFromBase Base16 (toS @Text @ByteString s))
   parseJSON x = typeMismatch "Body" x
 
--- | The type of a response.
---
--- This is used pretty much only to match responses with requests.
---
--- XXX: Make this a sum type?
--- XXX: Duplication with ServerMessage?
-type ResponseType = Text
-
 -- | A message sent from a rendezvous client to the server.
 data ClientMessage
   = -- | Set the application ID and the "side" for the duration of the connection.
@@ -339,80 +331,13 @@ instance FromJSON MessageID where
       _ -> fail $ "Could not parse MessageID: " <> toS s
   parseJSON unknown = typeMismatch "MessageID" unknown
 
--- | Connection to a Rendezvous server.
-data Connection
-  = Conn
-  { -- | Underlying websocket connection
-    wsConn :: WS.Connection
-  , -- | Responses that we are waiting for from the server.
-    --
-    -- If there is an entry in this map for a response type, that means
-    -- we've made a request that expects the given response.
-    --
-    -- When the response is received, we populate the TMVar. Then the function
-    -- that made the request unblocks, uses the value, and updates the map.
-    --
-    -- XXX: Could abstronaut this away, making ResponseType and ServerMessage
-    -- both type variables, and instead implementing something that just
-    -- matches requests with responses and shoves unmatched ones to a channel.
-    pendingVar :: TVar (HashMap ResponseType (TMVar ServerMessage))
-  }
-
--- | Initialize a new Magic Wormhole Rendezvous connection.
+-- | The type of a response.
 --
--- Will generally want to use 'connect' instead.
-newConnection :: WS.Connection -> STM Connection
-newConnection ws = do
-  pendingVar' <- newTVar mempty
-  pure Conn { wsConn = ws, pendingVar = pendingVar' }
-
--- | Error caused by misusing the client.
-data ClientError
-  = -- | We tried to do an RPC while another RPC with the same response type
-    -- was in flight. See warner/magic-wormhole#260 for details.
-    AlreadySent ResponseType
-    -- | Tried to send a non-RPC as if it were an RPC (i.e. expecting a response).
-  | NotAnRPC ClientMessage
-  deriving (Eq, Show)
-
--- | Tell the connection that we expect a response of the given type.
+-- This is used pretty much only to match responses with requests.
 --
--- Will fail with a 'ClientError' if we are already expecting a response of this type.
---
--- XXX: Maybe return (ResponseType, (TMVar ServerMessage)) tuple (possibly as an opaque type)?
-expectResponse :: Connection -> ResponseType -> STM (Either ClientError (TMVar ServerMessage))
-expectResponse Conn{pendingVar} responseType = do
-  pending <- readTVar pendingVar
-  case HashMap.lookup responseType pending of
-    Nothing -> do
-      box <- newEmptyTMVar
-      writeTVar pendingVar (HashMap.insert responseType box pending)
-      pure (Right box)
-    Just _ -> pure (Left (AlreadySent responseType))
-
--- | Error due to weirdness from the server.
-data ServerError
-  = -- | Server sent us a response for something that we hadn't requested.
-    ResponseWithoutRequest ResponseType ServerMessage
-    -- | We couldn't understand the message from the server.
-  | ParseError String
-    -- | Clients are not welcome on the server right now.
-  | Unwelcome Text
-    -- | We were sent a message other than "Welcome" on connect.
-  | UnexpectedMessage ServerMessage
-  deriving (Eq, Show)
-
--- | Called when we have received a response from the server.
---
--- Tells anything waiting for the response that they can stop waiting now.
-gotResponse :: Connection -> ResponseType -> ServerMessage -> STM (Maybe ServerError)
-gotResponse Conn{pendingVar} responseType message = do
-  pending <- readTVar pendingVar
-  case HashMap.lookup responseType pending of
-    Nothing -> pure (Just (ResponseWithoutRequest responseType message))
-    Just box -> do
-      putTMVar box message  -- XXX: This will block (retry the transaction) if already populated. I don't think that's what we want.
-      pure Nothing
+-- XXX: Make this a sum type?
+-- XXX: Duplication with ServerMessage?
+type ResponseType = Text
 
 -- XXX: This expectResponse / getResponseType stuff feels off to me.
 -- I think we could do something better.
@@ -448,17 +373,59 @@ getResponseType Ack = Nothing
 getResponseType Pong{} = Just "pong"
 getResponseType Error{} = Nothing -- XXX: Alternatively, get the response type of the original message?
 
--- | Run a Magic Wormhole Rendezvous client.
-runClient :: WebSocketEndpoint -> AppID -> Side -> (Connection -> IO a) -> IO a
-runClient (WebSocketEndpoint host port path) appID side' app =
-  Socket.withSocketsDo . WS.runClient host port path $ \ws -> do
-    conn' <- connect ws
-    case conn' of
-      Left _err -> notImplemented -- XXX: Welcome failed
-      Right conn -> do
-        bind conn appID side'
-        withAsync (forever (void (readMessage conn)))  -- XXX: Discards any server errors.
-          (\_ -> app conn)
+-- | Connection to a Rendezvous server.
+data Connection
+  = Conn
+  { -- | Underlying websocket connection
+    wsConn :: WS.Connection
+  , -- | Responses that we are waiting for from the server.
+    --
+    -- If there is an entry in this map for a response type, that means
+    -- we've made a request that expects the given response.
+    --
+    -- When the response is received, we populate the TMVar. Then the function
+    -- that made the request unblocks, uses the value, and updates the map.
+    --
+    -- XXX: Could abstronaut this away, making ResponseType and ServerMessage
+    -- both type variables, and instead implementing something that just
+    -- matches requests with responses and shoves unmatched ones to a channel.
+    pendingVar :: TVar (HashMap ResponseType (TMVar ServerMessage))
+  }
+
+-- | Initialize a new Magic Wormhole Rendezvous connection.
+--
+-- Will generally want to use 'connect' instead.
+newConnection :: WS.Connection -> STM Connection
+newConnection ws = do
+  pendingVar' <- newTVar mempty
+  pure Conn { wsConn = ws, pendingVar = pendingVar' }
+
+-- | Tell the connection that we expect a response of the given type.
+--
+-- Will fail with a 'ClientError' if we are already expecting a response of this type.
+--
+-- XXX: Maybe return (ResponseType, (TMVar ServerMessage)) tuple (possibly as an opaque type)?
+expectResponse :: Connection -> ResponseType -> STM (Either ClientError (TMVar ServerMessage))
+expectResponse Conn{pendingVar} responseType = do
+  pending <- readTVar pendingVar
+  case HashMap.lookup responseType pending of
+    Nothing -> do
+      box <- newEmptyTMVar
+      writeTVar pendingVar (HashMap.insert responseType box pending)
+      pure (Right box)
+    Just _ -> pure (Left (AlreadySent responseType))
+
+-- | Called when we have received a response from the server.
+--
+-- Tells anything waiting for the response that they can stop waiting now.
+gotResponse :: Connection -> ResponseType -> ServerMessage -> STM (Maybe ServerError)
+gotResponse Conn{pendingVar} responseType message = do
+  pending <- readTVar pendingVar
+  case HashMap.lookup responseType pending of
+    Nothing -> pure (Just (ResponseWithoutRequest responseType message))
+    Just box -> do
+      putTMVar box message  -- XXX: This will block (retry the transaction) if already populated. I don't think that's what we want.
+      pure Nothing
 
 -- | Read a message from the server. If it's a response, make sure we handle it.
 readMessage :: Connection -> IO (Maybe ServerError)
@@ -477,6 +444,18 @@ readMessage conn = do
             _ -> panic $ "Impossible code. No response type for " <> show msg  -- XXX: Pretty sure we can design this away.
         Just responseType ->
           atomically $ gotResponse conn responseType msg
+
+-- | Run a Magic Wormhole Rendezvous client.
+runClient :: WebSocketEndpoint -> AppID -> Side -> (Connection -> IO a) -> IO a
+runClient (WebSocketEndpoint host port path) appID side' app =
+  Socket.withSocketsDo . WS.runClient host port path $ \ws -> do
+    conn' <- connect ws
+    case conn' of
+      Left _err -> notImplemented -- XXX: Welcome failed
+      Right conn -> do
+        bind conn appID side'
+        withAsync (forever (void (readMessage conn)))  -- XXX: Discards any server errors.
+          (\_ -> app conn)
 
 -- | Establish a Magic Wormhole connection.
 --
@@ -500,13 +479,6 @@ connect conn = do
 -- websocket level.
 receive :: Connection -> IO (Either ServerError ServerMessage)
 receive = map (bimap ParseError identity . eitherDecode) . WS.receiveData . wsConn
-
--- | Any possible error from this module.
-data RendezvousError
-  = -- | An error due to misusing the client.
-    ClientError ClientError
-    -- | An error due to weird message from the server.
-  | ServerError ServerError deriving (Eq, Show)
 
 -- | Send a message to the Rendezvous server that we don't expect a response for.
 send :: Connection -> ClientMessage -> IO ()
@@ -574,3 +546,30 @@ ping conn n = do
 --   finished processing it. (jml thinks "ack" is sent immediately on receipt).
 -- - might want to put some state on the 'Connection' type
 -- - possibly create a separate "response" type?
+-- | Any possible error from this module.
+data RendezvousError
+  = -- | An error due to misusing the client.
+    ClientError ClientError
+    -- | An error due to weird message from the server.
+  | ServerError ServerError deriving (Eq, Show)
+
+-- | Error due to weirdness from the server.
+data ServerError
+  = -- | Server sent us a response for something that we hadn't requested.
+    ResponseWithoutRequest ResponseType ServerMessage
+    -- | We couldn't understand the message from the server.
+  | ParseError String
+    -- | Clients are not welcome on the server right now.
+  | Unwelcome Text
+    -- | We were sent a message other than "Welcome" on connect.
+  | UnexpectedMessage ServerMessage
+  deriving (Eq, Show)
+
+-- | Error caused by misusing the client.
+data ClientError
+  = -- | We tried to do an RPC while another RPC with the same response type
+    -- was in flight. See warner/magic-wormhole#260 for details.
+    AlreadySent ResponseType
+    -- | Tried to send a non-RPC as if it were an RPC (i.e. expecting a response).
+  | NotAnRPC ClientMessage
+  deriving (Eq, Show)
