@@ -31,7 +31,6 @@ library
     , network-uri
     , websockets
   exposed-modules:
-      MagicWormhole
       MagicWormhole.Internal.Rendezvous
       MagicWormhole.Internal.WebSockets
   default-language: Haskell2010
@@ -47,7 +46,6 @@ executable hocus-pocus
     , protolude
     , magic-wormhole
     , optparse-applicative
-    , websockets
   default-language: Haskell2010
 
 test-suite tasty
@@ -60,9 +58,13 @@ test-suite tasty
   build-depends:
       base
     , protolude
+    , aeson
     , hedgehog
     , magic-wormhole
     , tasty
     , tasty-hedgehog
     , tasty-hspec
+  other-modules:
+      Rendezvous
+      WebSockets
   default-language: Haskell2010

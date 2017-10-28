@@ -39,6 +39,7 @@ tests:
     main: Tasty.hs
     source-dirs: tests
     dependencies:
+      - aeson
       - hedgehog
       - magic-wormhole
       - tasty

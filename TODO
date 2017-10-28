@@ -8,12 +8,21 @@
 :END:
 * TODO handle "welcome" message from server
 * TODO Set up logging (monad-logger)
-* TODO move code to library
+* DONE move code to library
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2017-10-24 Tue 12:58]
+:END:
 ** MagicWormhole.Internal.Websocket
 ** MagicWormhole.Internal.Rendezvous
 ** MagicWormhole.Internal.Logging
-* TODO Write some tests
-** TODO Roundtripping parser tests
+* DONE Write some tests
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2017-10-25 Wed 10:35]
+:END:
+** DONE Roundtripping parser tests
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2017-10-25 Wed 10:35]
+:END:
 * TODO Implement "send" against ad hoc 'wormhole receive'
 * TODO Try to write integration tests?
 ** TODO Write Python client that can do non-interactive 'send' and 'receive'
