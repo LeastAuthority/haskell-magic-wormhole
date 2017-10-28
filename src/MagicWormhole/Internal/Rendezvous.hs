@@ -88,16 +88,55 @@ import MagicWormhole.Internal.WebSockets (WebSocketEndpoint(..))
 --     make sense outside the scope of a binding (e.g. ping) and messages that only
 --     make sense after a bind (e.g. allocate)
 data ServerMessage
-  = Welcome { motd :: Maybe Text, errorMessage :: Maybe Text }
-  | Nameplates { nameplates :: [Nameplate] }
-  | Allocated { nameplate :: Nameplate }
-  | Claimed { mailbox :: Mailbox }
-  | Released
-  | Message { side :: Side, phase :: Phase, messageID :: MessageID, body :: Body }
-  | Closed
-  | Ack
-  | Pong Int
-  | Error { _errorMessage :: Text , _original :: ClientMessage }
+  = -- | Sent by the server on initial connection.
+    Welcome
+    { -- | A message to be displayed to users when they connect to the server
+      motd :: Maybe Text
+      -- | If present, the server does not want the client to proceed. Here's the reason why.
+    , errorMessage :: Maybe Text
+    }
+  | -- | Sent in response to "list"
+    Nameplates
+    {
+      nameplates :: [Nameplate]
+    }
+  | -- | Sent in response to "allocate"
+    Allocated
+    {
+      -- | The nameplate allocated to this connection (?).
+      nameplate :: Nameplate
+    }
+  | -- | Sent in response to "claim"
+    Claimed
+    { -- | The mailbox claimed by this connection (?)
+      mailbox :: Mailbox
+    }
+  | -- | Sent in response to "release"
+    Released
+  | -- | A message sent to the mailbox
+    Message
+    {
+      -- | Which side sent the message. Might be our side.
+      side :: Side
+    , -- | Which phase of the client protocol we are in.
+      phase :: Phase
+      -- | An identifier for the message. Unused.
+    , messageID :: MessageID
+    , -- | The body of the message. To be interpreted by the client protocol.
+      body :: Body
+    }
+  | -- | Sent in response to "close"
+    Closed
+  | -- | Sent immediately after every message. Unused.
+    Ack
+  | -- | Sent in response to "pong"
+    Pong Int
+  | -- | Sent by the server when it receives something from the client that it does not understand.
+    Error
+    { -- | Message explaining what the problem is
+      _errorMessage :: Text
+      -- | The message that caused the problem.
+    , _original :: ClientMessage }
   deriving (Eq, Show)
 
 instance FromJSON ServerMessage where
@@ -186,8 +225,8 @@ instance FromJSON Body where
 --
 -- This is used pretty much only to match responses with requests.
 --
--- TODO: Make this a sum type?
--- TODO: Duplication with ServerMessage?
+-- XXX: Make this a sum type?
+-- XXX: Duplication with ServerMessage?
 type ResponseType = Text
 
 -- | A message sent from a rendezvous client to the server.
@@ -258,7 +297,17 @@ newtype AppID = AppID Text deriving (Eq, Show, FromJSON, ToJSON)
 -- real messages from other clients.
 newtype Side = Side Text deriving (Eq, Show, FromJSON, ToJSON)
 
-data Mood = Happy | Lonely | Scary | Errory deriving (Eq, Show)
+-- | How the client feels. Reported by the client to the server at the end of
+-- a wormhole session.
+data Mood
+  = -- | The client had a great session with its peer.
+    Happy
+    -- | The client never saw its peer.
+  | Lonely
+    -- | The client saw a peer it could not trust.
+  | Scary
+    -- | The client encountered some problem.
+  | Errory deriving (Eq, Show)
 
 instance ToJSON Mood where
   toJSON Happy = "happy"
@@ -275,8 +324,6 @@ instance FromJSON Mood where
       "errory" -> pure Errory
       _ -> fail $ "Unrecognized mood: " <> toS s
   parseJSON unknown = typeMismatch "Mood" unknown
-
-type ParseError = String
 
 -- | Identifier sent with every client message that is included in the
 -- matching server responses.
@@ -311,6 +358,9 @@ data Connection
     pendingVar :: TVar (HashMap ResponseType (TMVar ServerMessage))
   }
 
+-- | Initialize a new Magic Wormhole Rendezvous connection.
+--
+-- Will generally want to use 'connect' instead.
 newConnection :: WS.Connection -> STM Connection
 newConnection ws = do
   pendingVar' <- newTVar mempty
@@ -325,6 +375,11 @@ data ClientError
   | NotAnRPC ClientMessage
   deriving (Eq, Show)
 
+-- | Tell the connection that we expect a response of the given type.
+--
+-- Will fail with a 'ClientError' if we are already expecting a response of this type.
+--
+-- XXX: Maybe return (ResponseType, (TMVar ServerMessage)) tuple (possibly as an opaque type)?
 expectResponse :: Connection -> ResponseType -> STM (Either ClientError (TMVar ServerMessage))
 expectResponse Conn{pendingVar} responseType = do
   pending <- readTVar pendingVar
@@ -337,16 +392,24 @@ expectResponse Conn{pendingVar} responseType = do
 
 -- | Error due to weirdness from the server.
 data ServerError
-  = UnrecognizedResponse ServerMessage
-  | ResponseWithoutRequest ServerMessage
+  = -- | Server sent us a response for something that we hadn't requested.
+    ResponseWithoutRequest ResponseType ServerMessage
+    -- | We couldn't understand the message from the server.
   | ParseError String
+    -- | Clients are not welcome on the server right now.
+  | Unwelcome Text
+    -- | We were sent a message other than "Welcome" on connect.
+  | UnexpectedMessage ServerMessage
   deriving (Eq, Show)
 
+-- | Called when we have received a response from the server.
+--
+-- Tells anything waiting for the response that they can stop waiting now.
 gotResponse :: Connection -> ResponseType -> ServerMessage -> STM (Maybe ServerError)
 gotResponse Conn{pendingVar} responseType message = do
   pending <- readTVar pendingVar
   case HashMap.lookup responseType pending of
-    Nothing -> pure (Just (ResponseWithoutRequest message))
+    Nothing -> pure (Just (ResponseWithoutRequest responseType message))
     Just box -> do
       putTMVar box message  -- XXX: This will block (retry the transaction) if already populated. I don't think that's what we want.
       pure Nothing
@@ -361,6 +424,7 @@ gotResponse Conn{pendingVar} responseType message = do
 --   rather than a map of a type value to generic response box, have one box for each
 --   request/response pair?
 
+-- | Map 'ClientMessage' to a response. 'Nothing' means that we do not need a response.
 expectedResponse :: ClientMessage -> Maybe ResponseType
 expectedResponse Bind{} = Nothing
 expectedResponse List = Just "nameplates"
@@ -371,6 +435,7 @@ expectedResponse Open{} = Nothing
 expectedResponse Close{} = Just "closed"
 expectedResponse Ping{} = Just "pong"
 
+-- | Map 'ServerMessage' to a response. 'Nothing' means that it's not a response to anything.
 getResponseType :: ServerMessage -> Maybe ResponseType
 getResponseType Welcome{} = Nothing
 getResponseType Nameplates{} = Just "nameplates"
@@ -383,6 +448,7 @@ getResponseType Ack = Nothing
 getResponseType Pong{} = Just "pong"
 getResponseType Error{} = Nothing -- XXX: Alternatively, get the response type of the original message?
 
+-- | Run a Magic Wormhole Rendezvous client.
 runClient :: WebSocketEndpoint -> AppID -> Side -> (Connection -> IO a) -> IO a
 runClient (WebSocketEndpoint host port path) appID side' app =
   Socket.withSocketsDo . WS.runClient host port path $ \ws -> do
@@ -391,13 +457,15 @@ runClient (WebSocketEndpoint host port path) appID side' app =
       Left _err -> notImplemented -- XXX: Welcome failed
       Right conn -> do
         bind conn appID side'
-        withAsync (forever (void (readMessage conn))) (\_ -> app conn)
+        withAsync (forever (void (readMessage conn)))  -- XXX: Discards any server errors.
+          (\_ -> app conn)
 
+-- | Read a message from the server. If it's a response, make sure we handle it.
 readMessage :: Connection -> IO (Maybe ServerError)
 readMessage conn = do
-  msg' <- eitherDecode <$> WS.receiveData (wsConn conn)
+  msg' <- receive conn
   case msg' of
-    Left parseError -> pure (Just (ParseError parseError))
+    Left parseError -> pure (Just parseError)
     Right msg ->
       case getResponseType msg of
         Nothing ->
@@ -405,6 +473,7 @@ readMessage conn = do
             Ack -> pure Nothing  -- Skip Ack, because there's no point in handling it.
             Welcome{} -> notImplemented -- XXX: Not sure how to handle this?
             Error{} -> notImplemented -- XXX: Need a plan for handling errors
+            Message{} -> notImplemented
             _ -> panic $ "Impossible code. No response type for " <> show msg  -- XXX: Pretty sure we can design this away.
         Just responseType ->
           atomically $ gotResponse conn responseType msg
@@ -416,28 +485,28 @@ readMessage conn = do
 --
 -- Receives the "welcome" message. If the message contains an error, returns
 -- that as Left, otherwise return a connection.
---
--- TODO: Also bind inside this.
---
--- TODO: Distinguish between parse error (server sent us non-welcome) and welcome error
--- (server sent us a 'welcome' with an error in it).
-connect :: WS.Connection -> IO (Either Text Connection)
+connect :: WS.Connection -> IO (Either ServerError Connection)
 connect conn = do
   welcome <- eitherDecode <$> WS.receiveData conn
   case welcome of
-    Left parseError -> pure . Left $ toS parseError
-    Right Welcome {errorMessage = Just errMsg} -> pure . Left $ errMsg
+    Left parseError -> pure . Left . ParseError $ parseError
+    Right Welcome {errorMessage = Just errMsg} -> pure . Left . Unwelcome $ errMsg
     Right Welcome {errorMessage = Nothing} -> Right <$> atomically (newConnection conn)
-    Right unexpected -> pure . Left $ "Unexpected message: " <> show unexpected
+    Right unexpected -> pure . Left . UnexpectedMessage $ unexpected
 
 -- | Receive a wormhole message from a websocket. Blocks until a message is received.
 -- Returns an error string if we cannot parse the message as a valid wormhole 'Message'.
 -- Throws exceptions if the underlying connection is closed or there is some error at the
 -- websocket level.
-receive :: Connection -> IO (Either ParseError ServerMessage)
-receive = map eitherDecode . WS.receiveData . wsConn
+receive :: Connection -> IO (Either ServerError ServerMessage)
+receive = map (bimap ParseError identity . eitherDecode) . WS.receiveData . wsConn
 
-data RendezvousError = ClientError ClientError | ServerError ServerError deriving (Eq, Show)
+-- | Any possible error from this module.
+data RendezvousError
+  = -- | An error due to misusing the client.
+    ClientError ClientError
+    -- | An error due to weird message from the server.
+  | ServerError ServerError deriving (Eq, Show)
 
 -- | Send a message to the Rendezvous server that we don't expect a response for.
 send :: Connection -> ClientMessage -> IO ()
@@ -448,7 +517,7 @@ rpc :: Connection -> ClientMessage -> IO (Either RendezvousError ServerMessage)
 rpc conn req =
   case expectedResponse req of
     Nothing ->
-      -- TODO: Pretty sure we can juggle things around at the type level
+      -- XXX: Pretty sure we can juggle things around at the type level
       -- to remove this check. (i.e. make a type for RPC requests).
       pure (Left (ClientError (NotAnRPC req)))
     Just responseType -> do
@@ -466,6 +535,12 @@ rpc conn req =
             pure response
           pure (Right response)
 
+-- | Set the application ID and side for the rest of this connection.
+--
+-- The Rendezvous protocol doesn't have a response to 'bind', so there's no
+-- way to tell if it has had its effect.
+--
+-- See https://github.com/warner/magic-wormhole/issues/261
 bind :: Connection -> AppID -> Side -> IO ()
 bind conn appID side' = send conn (Bind appID side')
 
@@ -476,7 +551,6 @@ bind conn appID side' = send conn (Bind appID side')
 ping :: Connection -> Int -> IO (Either RendezvousError Int)
 ping conn n = do
   response <- rpc conn (Ping n)
-  -- XXX: Duplicated a lot with 'welcome'. Probably need a monad.
   pure $ case response of
     Left err -> Left err
     -- XXX: Should we indicate that pong response differs from ping?
