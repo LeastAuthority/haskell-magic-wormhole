@@ -40,6 +40,7 @@ clientMessages = Gen.choice
   , Claim <$> genNameplates
   , Release <$> Gen.maybe genNameplates
   , Open <$> mailboxes
+  , Add <$> phases <*> bodies
   , Close <$> Gen.maybe mailboxes <*> Gen.maybe moods
   , Ping <$> Gen.int Range.linearBounded
   ]

@@ -232,10 +232,14 @@ data ClientMessage
     -- | Claim a nameplate.
   | Claim Nameplate
     -- | Release a claimed nameplate.
-    -- XXX: What are the semantics of not specifying this?
+    -- TODO: Document the semantics of not specifying the nameplate to release.
   | Release (Maybe Nameplate)
     -- | Open a mailbox.
   | Open Mailbox
+    -- | Send a message to an open mailbox. The message will be delivered to
+    -- all connected clients that also have that mailbox open, including this
+    -- one.
+  | Add Phase Body
     -- | Close a mailbox. Since only one mailbox can be open at a time, if
     -- mailbox isn't specified, then close the open mailbox.
   | Close (Maybe Mailbox) (Maybe Mood)
@@ -253,6 +257,7 @@ instance FromJSON ClientMessage where
       "claim" -> Claim <$> v .: "nameplate"
       "release" -> Release <$> v .:? "nameplate"
       "open" -> Open <$> v .: "mailbox"
+      "add" -> Add <$> v .: "phase" <*> v .: "body"
       "close" -> Close <$> v .:? "mailbox" <*> v .:? "mood"
       "ping" -> Ping <$> v .: "ping"
       _ -> fail $ "Unrecognized rendezvous client message type: " <> t
@@ -271,6 +276,10 @@ instance ToJSON ClientMessage where
                                  Nothing -> []
                                  Just n -> ["nameplate" .= n]
   toJSON (Open mailbox') = objectWithType "open" [ "mailbox" .= mailbox' ]
+  toJSON (Add phase' body') = objectWithType "add"
+    [ "phase" .= phase'
+    , "body" .= body'
+    ]
   toJSON (Close mailbox' mood') =
     objectWithType "close" $ catMaybes [ ("mailbox" .=) <$> mailbox'
                                        , ("mood" .=) <$> mood'
@@ -357,6 +366,7 @@ expectedResponse Allocate = Just "allocated"
 expectedResponse Claim{} = Just "claimed"
 expectedResponse Release{} = Just "released"
 expectedResponse Open{} = Nothing
+expectedResponse Add{} = Nothing
 expectedResponse Close{} = Just "closed"
 expectedResponse Ping{} = Just "pong"
 
