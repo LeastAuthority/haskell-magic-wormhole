@@ -93,7 +93,7 @@ data ServerMessage
     { -- | A message to be displayed to users when they connect to the server
       motd :: Maybe Text
       -- | If present, the server does not want the client to proceed. Here's the reason why.
-    , errorMessage :: Maybe Text
+    , welcomeErrorMessage :: Maybe Text
     }
   | -- | Sent in response to "list"
     Nameplates
@@ -134,9 +134,10 @@ data ServerMessage
   | -- | Sent by the server when it receives something from the client that it does not understand.
     Error
     { -- | Message explaining what the problem is
-      _errorMessage :: Text
+      errorMessage :: Text
       -- | The message that caused the problem.
-    , _original :: ClientMessage }
+    , original :: ClientMessage
+    }
   deriving (Eq, Show)
 
 instance FromJSON ServerMessage where
@@ -476,7 +477,7 @@ readMessage conn = do
           case msg of
             Ack -> pure Nothing  -- Skip Ack, because there's no point in handling it.
             Welcome{} -> notImplemented -- XXX: Not sure how to handle this?
-            Error{} -> notImplemented -- XXX: Need a plan for handling errors
+            Error{errorMessage, original} -> pure (Just (BadRequest errorMessage original))
             Message{} -> notImplemented
             _ -> panic $ "Impossible code. No response type for " <> show msg  -- XXX: Pretty sure we can design this away.
         Just responseType ->
@@ -506,8 +507,8 @@ connect conn = do
   welcome <- eitherDecode <$> WS.receiveData conn
   case welcome of
     Left parseError -> pure . Left . ParseError $ parseError
-    Right Welcome {errorMessage = Just errMsg} -> pure . Left . Unwelcome $ errMsg
-    Right Welcome {errorMessage = Nothing} -> Right <$> atomically (newConnection conn)
+    Right Welcome {welcomeErrorMessage = Just errMsg} -> pure . Left . Unwelcome $ errMsg
+    Right Welcome {welcomeErrorMessage = Nothing} -> Right <$> atomically (newConnection conn)
     Right unexpected -> pure . Left . UnexpectedMessage $ unexpected
 
 -- | Receive a wormhole message from a websocket. Blocks until a message is received.
@@ -596,6 +597,8 @@ data ServerError
   | Unwelcome Text
     -- | We were sent a message other than "Welcome" on connect.
   | UnexpectedMessage ServerMessage
+    -- | Client sent a message that the server could not understand.
+  | BadRequest Text ClientMessage
   deriving (Eq, Show)
 
 -- | Error caused by misusing the client.
