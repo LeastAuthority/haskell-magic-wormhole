@@ -415,9 +415,10 @@ data Connection
     -- When the response is received, we populate the TMVar. Then the function
     -- that made the request unblocks, uses the value, and updates the map.
     --
-    -- XXX: Could abstronaut this away, making ResponseType and ServerMessage
-    -- both type variables, and instead implementing something that just
-    -- matches requests with responses and shoves unmatched ones to a channel.
+    -- TODO: Perhaps abstronaut this away, making ResponseType and
+    -- ServerMessage both type variables, and instead implement something that
+    -- just matches requests with responses and shoves unmatched ones to a
+    -- channel.
     pendingVar :: TVar (HashMap ResponseType (TMVar ServerMessage))
   }
 
@@ -457,7 +458,10 @@ gotResponse Conn{pendingVar} responseType message = do
   case HashMap.lookup responseType pending of
     Nothing -> pure (Just (ResponseWithoutRequest responseType message))
     Just box -> do
-      putTMVar box message  -- XXX: This will block (retry the transaction) if already populated. I don't think that's what we want.
+      -- TODO: This will block reading from the server (by retrying the
+      -- transaction) if the box is already populated. I don't think we want
+      -- that, but I'm not sure what behavior we do want.
+      putTMVar box message
       pure Nothing
 
 -- | Read a message from the server. If it's a response, make sure we handle it.
