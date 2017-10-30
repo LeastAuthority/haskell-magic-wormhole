@@ -476,7 +476,7 @@ readMessage conn = do
         Nothing ->
           case msg of
             Ack -> pure Nothing  -- Skip Ack, because there's no point in handling it.
-            Welcome{} -> notImplemented -- XXX: Not sure how to handle this?
+            welcome@Welcome{} -> pure (Just (UnexpectedMessage welcome))
             Error{errorMessage, original} -> pure (Just (BadRequest errorMessage original))
             Message{} -> notImplemented
             _ -> panic $ "Impossible code. No response type for " <> show msg  -- XXX: Pretty sure we can design this away.
