@@ -13,6 +13,13 @@ module MagicWormhole.Internal.Rendezvous
   , rpc
   -- * Specific RPCs
   , ping
+  , list
+  , allocate
+  , claim
+  , release
+  , open
+  , close
+  , add
   -- * Running a Rendezvous client
   , Connection
   , runClient
@@ -27,7 +34,7 @@ module MagicWormhole.Internal.Rendezvous
   , Mood(..)
   ) where
 
-import Protolude
+import Protolude hiding (list, phase)
 
 import Control.Concurrent.STM
   ( TVar
@@ -466,7 +473,7 @@ gotResponse Conn{pendingVar} responseType message = do
       pure Nothing
 
 -- | Read a message from the server. If it's a response, make sure we handle it.
-readMessage :: Connection -> IO (Maybe ServerError)
+readMessage :: HasCallStack => Connection -> IO (Maybe ServerError)
 readMessage conn = do
   msg' <- receive conn
   case msg' of
@@ -490,7 +497,7 @@ readMessage conn = do
 -- | Run a Magic Wormhole Rendezvous client.
 --
 -- Will fail with IO (Left ServerError) if the server declares we are unwelcome.
-runClient :: WebSocketEndpoint -> AppID -> Side -> (Connection -> IO a) -> IO (Either ServerError a)
+runClient :: HasCallStack => WebSocketEndpoint -> AppID -> Side -> (Connection -> IO a) -> IO (Either ServerError a)
 runClient (WebSocketEndpoint host port path) appID side' app =
   Socket.withSocketsDo . WS.runClient host port path $ \ws -> do
     conn' <- connect ws
@@ -510,7 +517,7 @@ runClient (WebSocketEndpoint host port path) appID side' app =
 --
 -- Receives the "welcome" message. If the message contains an error, returns
 -- that as Left, otherwise return a connection.
-connect :: WS.Connection -> IO (Either ServerError Connection)
+connect :: HasCallStack => WS.Connection -> IO (Either ServerError Connection)
 connect conn = do
   welcome <- eitherDecode <$> WS.receiveData conn
   case welcome of
@@ -523,15 +530,15 @@ connect conn = do
 -- Returns an error string if we cannot parse the message as a valid wormhole 'Message'.
 -- Throws exceptions if the underlying connection is closed or there is some error at the
 -- websocket level.
-receive :: Connection -> IO (Either ServerError ServerMessage)
+receive :: HasCallStack => Connection -> IO (Either ServerError ServerMessage)
 receive = map (bimap ParseError identity . eitherDecode) . WS.receiveData . wsConn
 
 -- | Send a message to the Rendezvous server that we don't expect a response for.
-send :: Connection -> ClientMessage -> IO ()
+send :: HasCallStack => Connection -> ClientMessage -> IO ()
 send conn req = WS.sendBinaryData (wsConn conn) (encode req)
 
 -- | Make a request to the rendezvous server.
-rpc :: Connection -> ClientMessage -> IO (Either RendezvousError ServerMessage)
+rpc :: HasCallStack => Connection -> ClientMessage -> IO (Either RendezvousError ServerMessage)
 rpc conn req =
   case expectedResponse req of
     Nothing ->
@@ -555,23 +562,95 @@ rpc conn req =
 -- way to tell if it has had its effect.
 --
 -- See https://github.com/warner/magic-wormhole/issues/261
-bind :: Connection -> AppID -> Side -> IO ()
+bind :: HasCallStack => Connection -> AppID -> Side -> IO ()
 bind conn appID side' = send conn (Bind appID side')
 
 -- | Ping the server.
 --
 -- This is an in-band ping, used mostly for testing. It is not necessary to
 -- keep the connection alive.
-ping :: Connection -> Int -> IO (Either RendezvousError Int)
+ping :: HasCallStack => Connection -> Int -> IO (Either RendezvousError Int)
 ping conn n = do
   response <- rpc conn (Ping n)
   pure $ case response of
     Left err -> Left err
     Right (Pong n') -> Right n'
-    Right unexpected ->
-      -- XXX: Panic is OK because this shouldn't be possible.
-      -- We should be able to refactor though.
-      panic $ "Unexpected message: " <> show unexpected
+    Right unexpected -> unexpectedMessage (Ping n) unexpected
+
+-- | List the nameplates on the server.
+list :: HasCallStack => Connection -> IO (Either RendezvousError [Nameplate])
+list conn = do
+  response <- rpc conn List
+  pure $ case response of
+    Left err -> Left err
+    Right (Nameplates nameplates) -> Right nameplates
+    Right unexpected -> unexpectedMessage List unexpected
+
+-- | Allocate a nameplate on the server.
+allocate :: HasCallStack => Connection -> IO (Either RendezvousError Nameplate)
+allocate conn = do
+  response <- rpc conn Allocate
+  pure $ case response of
+    Left err -> Left err
+    Right (Allocated nameplate) -> Right nameplate
+    Right unexpected -> unexpectedMessage Allocate unexpected
+
+-- | Claim a nameplate on the server.
+claim :: HasCallStack => Connection -> Nameplate -> IO (Either RendezvousError Mailbox)
+claim conn nameplate = do
+  response <- rpc conn (Claim nameplate)
+  pure $ case response of
+    Left err -> Left err
+    Right (Claimed mailbox) -> Right mailbox
+    Right unexpected -> unexpectedMessage (Claim nameplate) unexpected
+
+-- | Release a nameplate on the server.
+--
+-- TODO: Document semantics around "optional" nameplate.
+--
+-- TODO: Make this impossible to call unless we have already claimed a
+-- namespace.
+release :: HasCallStack => Connection -> Maybe Nameplate -> IO (Either RendezvousError ())
+release conn nameplate' = do
+  response <- rpc conn (Release nameplate')
+  pure $ case response of
+    Left err -> Left err
+    Right Released -> Right ()
+    Right unexpected -> unexpectedMessage (Release nameplate') unexpected
+
+-- | Open a mailbox on the server.
+--
+-- TODO: Are we sure that we don't have to wait for a response here?
+--
+-- TODO: Find out what happens if we call 'open' when we already have a mailbox open.
+open :: HasCallStack => Connection -> Mailbox -> IO ()
+open conn mailbox = send conn (Open mailbox)
+
+-- | Close a mailbox on the server.
+close :: HasCallStack => Connection -> Maybe Mailbox -> Maybe Mood -> IO (Either RendezvousError ())
+close conn mailbox' mood' = do
+  response <- rpc conn (Close mailbox' mood')
+  pure $ case response of
+    Left err -> Left err
+    Right Closed -> Right ()
+    Right unexpected -> unexpectedMessage (Close mailbox' mood') unexpected
+
+-- | Send a message to the open mailbox.
+--
+-- XXX: Should we provide a version that blocks until the message comes back to us?
+add :: HasCallStack => Connection -> Phase -> Body -> IO ()
+add conn phase body = send conn (Add phase body)
+
+-- | Called when an RPC receives a message as a response that does not match
+-- the request.
+--
+-- As things are written, this should never happen, because 'gotResponse'
+-- makes sure we only ever populate the response placeholder with something
+-- that matches.
+--
+-- TODO: Try to make this unnecessary.
+unexpectedMessage :: HasCallStack => ClientMessage -> ServerMessage -> a
+unexpectedMessage request response = panic $ "Unexpected message: " <> show response <> ", in response to: " <> show request
 
 -- TODO
 -- - use motd somehow

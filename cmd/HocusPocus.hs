@@ -50,9 +50,16 @@ makeOptions headerText parser = Opt.info (Opt.helper <*> parser) (Opt.fullDesc <
 -- | Execute 'Command' against a Wormhole Rendezvous server.
 app :: Command -> Rendezvous.Connection -> IO ()
 app command conn = do
-  print command
-  pong <- Rendezvous.ping conn 5
-  print pong
+  result <- runExceptT $ do
+    print command
+    nameplate <- ExceptT $ Rendezvous.allocate conn
+    mailbox <- ExceptT $ Rendezvous.claim conn nameplate
+    liftIO $ Rendezvous.open conn mailbox  -- XXX: I guess we should run `close` in the case of exceptions?
+    liftIO $ Rendezvous.add conn (Rendezvous.Phase "foo") (Rendezvous.Body "hahaha")
+    ExceptT $ Rendezvous.close conn (Just mailbox) (Just Rendezvous.Happy)
+  case result of
+    Left err -> die $ "Failed to " <> show command <> ": " <> show err
+    Right _ -> pass
 
 main :: IO ()
 main = do
