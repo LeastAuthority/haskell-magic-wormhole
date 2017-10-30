@@ -200,7 +200,9 @@ objectWithType typ pairs = object $ ("type" .= typ):pairs
 -- TODO: Explain what a nameplate is and how it's used.
 newtype Nameplate = Nameplate Text deriving (Eq, Show, ToJSON, FromJSON)
 
--- | XXX: Placeholders
+-- | TODO: Document phase once we understand what it is. It's a bit awkward,
+-- because it appears to be an aspect of the client protocol, which I'd rather
+-- the server protocol implementation not have to know about.
 newtype Phase = Phase Text deriving (Eq, Show, ToJSON, FromJSON)
 
 -- | Identifier for a mailbox.
@@ -384,6 +386,23 @@ getResponseType Pong{} = Just "pong"
 getResponseType Error{} = Nothing -- XXX: Alternatively, get the response type of the original message?
 
 -- | Connection to a Rendezvous server.
+--
+-- Note on "RPCs":
+--
+-- The Magic Wormhole Rendezvous protocol is full duplex. Clients can send
+-- messages at any time and servers can send messages at any time.
+--
+-- Some of the messages sent by the client have a corresponding response. In
+-- this module, we call those "RPCs", and the outgoing client messages
+-- "requests".
+--
+-- To send an RPC with a 'Connection', we must:
+-- - register that we expect a response with 'expectResponse'
+-- - actually send the request
+-- - wait for the response with 'waitResponse'
+-- - continuously read messages from the server and call 'gotResponse' when we get them
+--
+-- To send messages that do not require a response, just use 'send'.
 data Connection
   = Conn
   { -- | Underlying websocket connection
@@ -413,8 +432,6 @@ newConnection ws = do
 -- | Tell the connection that we expect a response of the given type.
 --
 -- Will fail with a 'ClientError' if we are already expecting a response of this type.
---
--- XXX: Maybe return (ResponseType, (TMVar ServerMessage)) tuple (possibly as an opaque type)?
 expectResponse :: Connection -> ResponseType -> STM (Either ClientError (TMVar ServerMessage))
 expectResponse Conn{pendingVar} responseType = do
   pending <- readTVar pendingVar
@@ -424,6 +441,12 @@ expectResponse Conn{pendingVar} responseType = do
       writeTVar pendingVar (HashMap.insert responseType box pending)
       pure (Right box)
     Just _ -> pure (Left (AlreadySent responseType))
+
+waitForResponse :: Connection -> ResponseType -> TMVar ServerMessage -> STM ServerMessage
+waitForResponse conn responseType box = do
+  response <- takeTMVar box
+  modifyTVar' (pendingVar conn) (HashMap.delete responseType)
+  pure response
 
 -- | Called when we have received a response from the server.
 --
@@ -510,11 +533,7 @@ rpc conn req =
         Left clientError -> pure (Left (ClientError clientError))
         Right box -> do
           send conn req
-          response <- atomically $ do
-            -- XXX: Make this its own function
-            response <- takeTMVar box
-            modifyTVar' (pendingVar conn) (HashMap.delete responseType)
-            pure response
+          response <- atomically $ waitForResponse conn responseType box
           pure (Right response)
 
 -- | Set the application ID and side for the rest of this connection.
