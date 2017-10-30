@@ -484,15 +484,19 @@ readMessage conn = do
           atomically $ gotResponse conn responseType msg
 
 -- | Run a Magic Wormhole Rendezvous client.
-runClient :: WebSocketEndpoint -> AppID -> Side -> (Connection -> IO a) -> IO a
+--
+-- Will fail with IO (Left ServerError) if the server declares we are unwelcome.
+runClient :: WebSocketEndpoint -> AppID -> Side -> (Connection -> IO a) -> IO (Either ServerError a)
 runClient (WebSocketEndpoint host port path) appID side' app =
   Socket.withSocketsDo . WS.runClient host port path $ \ws -> do
     conn' <- connect ws
     case conn' of
-      Left _err -> notImplemented -- XXX: Welcome failed
+      Left err -> pure (Left err)
       Right conn -> do
         bind conn appID side'
-        withAsync (forever (void (readMessage conn)))  -- XXX: Discards any server errors.
+        -- TODO: Currently discards any ServerErrors that occur while reading.
+        -- Find a way to usefully report these errors.
+        Right <$> withAsync (forever (void (readMessage conn)))
           (\_ -> app conn)
 
 -- | Establish a Magic Wormhole connection.
@@ -559,7 +563,6 @@ ping conn n = do
   response <- rpc conn (Ping n)
   pure $ case response of
     Left err -> Left err
-    -- XXX: Should we indicate that pong response differs from ping?
     Right (Pong n') -> Right n'
     Right unexpected ->
       -- XXX: Panic is OK because this shouldn't be possible.

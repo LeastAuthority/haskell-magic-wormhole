@@ -57,4 +57,10 @@ app command conn = do
 main :: IO ()
 main = do
   options <- Opt.execParser (makeOptions "hocus-pocus - summon and traverse magic wormholes" optionsParser)
-  Rendezvous.runClient (rendezvousEndpoint options) (Rendezvous.AppID "jml.io/hocus-pocus") (Rendezvous.Side "treebeard") (app (cmd options))
+  result <- Rendezvous.runClient (rendezvousEndpoint options) appID side (app (cmd options))
+  case result of
+    Left err -> die $ "Server rejected connection: " <> show err
+    Right _ -> pass
+  where
+    appID = Rendezvous.AppID "jml.io/hocus-pocus"
+    side = Rendezvous.Side "treebeard"
