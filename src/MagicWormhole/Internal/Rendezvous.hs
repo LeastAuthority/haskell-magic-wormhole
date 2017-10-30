@@ -477,7 +477,11 @@ readMessage conn = do
           case msg of
             Ack -> pure Nothing  -- Skip Ack, because there's no point in handling it.
             welcome@Welcome{} -> pure (Just (UnexpectedMessage welcome))
-            Error{errorMessage, original} -> pure (Just (BadRequest errorMessage original))
+            err@Error{errorMessage, original} ->
+              case expectedResponse original of
+                Nothing -> pure (Just (ErrorForNonRequest errorMessage original))
+                Just responseType ->
+                  atomically $ gotResponse conn responseType err
             Message{} -> notImplemented  -- TODO: Implement message handling!
             _ -> panic $ "Impossible code. No response type for " <> show msg  -- XXX: Pretty sure we can design this away.
         Just responseType ->
@@ -541,7 +545,9 @@ rpc conn req =
         Right box -> do
           send conn req
           response <- atomically $ waitForResponse conn responseType box
-          pure (Right response)
+          pure $ case response of
+                   Error reason original -> Left (ClientError (BadRequest reason original))
+                   response' -> Right response'
 
 -- | Set the application ID and side for the rest of this connection.
 --
@@ -566,7 +572,6 @@ ping conn n = do
       -- XXX: Panic is OK because this shouldn't be possible.
       -- We should be able to refactor though.
       panic $ "Unexpected message: " <> show unexpected
-
 
 -- TODO
 -- - use motd somehow
@@ -598,8 +603,9 @@ data ServerError
   | Unwelcome Text
     -- | We were sent a message other than "Welcome" on connect.
   | UnexpectedMessage ServerMessage
-    -- | Client sent a message that the server could not understand.
-  | BadRequest Text ClientMessage
+    -- | We received an 'error' message for a message that's not expected to
+    -- have a response.
+  | ErrorForNonRequest Text ClientMessage
   deriving (Eq, Show)
 
 -- | Error caused by misusing the client.
@@ -609,4 +615,6 @@ data ClientError
     AlreadySent ResponseType
     -- | Tried to send a non-RPC as if it were an RPC (i.e. expecting a response).
   | NotAnRPC ClientMessage
+    -- | We sent a message that the server could not understand.
+  | BadRequest Text ClientMessage
   deriving (Eq, Show)
