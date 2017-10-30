@@ -478,7 +478,7 @@ readMessage conn = do
             Ack -> pure Nothing  -- Skip Ack, because there's no point in handling it.
             welcome@Welcome{} -> pure (Just (UnexpectedMessage welcome))
             Error{errorMessage, original} -> pure (Just (BadRequest errorMessage original))
-            Message{} -> notImplemented
+            Message{} -> notImplemented  -- TODO: Implement message handling!
             _ -> panic $ "Impossible code. No response type for " <> show msg  -- XXX: Pretty sure we can design this away.
         Just responseType ->
           atomically $ gotResponse conn responseType msg
@@ -537,8 +537,6 @@ rpc conn req =
     Just responseType -> do
       box' <- atomically $ expectResponse conn responseType
       case box' of
-        -- XXX: There's probably something clever we can do with the Left ->
-        -- Left, Right -> Right symmetry here.
         Left clientError -> pure (Left (ClientError clientError))
         Right box -> do
           send conn req
