@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE NamedFieldPuns #-}
 -- | Interactions with a Magic Wormhole Rendezvous server.
 --
@@ -36,6 +38,7 @@ import Control.Concurrent.STM
   )
 
 import Data.Aeson (eitherDecode, encode)
+import Data.Hashable (Hashable)
 import Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as HashMap
 import Data.String (String)
@@ -51,12 +54,18 @@ import MagicWormhole.Internal.WebSockets (WebSocketEndpoint(..))
 --
 -- XXX: Make this a sum type?
 -- XXX: Duplication with ServerMessage?
-type ResponseType = Text
+data ResponseType
+  = NameplatesResponse
+  | AllocatedResponse
+  | ClaimedResponse
+  | ReleasedResponse
+  | ClosedResponse
+  | PongResponse
+  deriving (Eq, Show, Generic, Hashable)
 
 -- XXX: This expectResponse / getResponseType stuff feels off to me.
 -- I think we could do something better.
 -- e.g.
--- - use an enum for ResponseType
 -- - embed the response type in the ServerMessage value so we don't need to "specify" it twice
 --   (once in the parser, once here)
 -- - change the structure to have stricter types?
@@ -66,26 +75,26 @@ type ResponseType = Text
 -- | Map 'ClientMessage' to a response. 'Nothing' means that we do not need a response.
 expectedResponse :: Messages.ClientMessage -> Maybe ResponseType
 expectedResponse Messages.Bind{} = Nothing
-expectedResponse Messages.List = Just "nameplates"
-expectedResponse Messages.Allocate = Just "allocated"
-expectedResponse Messages.Claim{} = Just "claimed"
-expectedResponse Messages.Release{} = Just "released"
+expectedResponse Messages.List = Just NameplatesResponse
+expectedResponse Messages.Allocate = Just AllocatedResponse
+expectedResponse Messages.Claim{} = Just ClaimedResponse
+expectedResponse Messages.Release{} = Just ReleasedResponse
 expectedResponse Messages.Open{} = Nothing
 expectedResponse Messages.Add{} = Nothing
-expectedResponse Messages.Close{} = Just "closed"
-expectedResponse Messages.Ping{} = Just "pong"
+expectedResponse Messages.Close{} = Just ClosedResponse
+expectedResponse Messages.Ping{} = Just PongResponse
 
 -- | Map 'ServerMessage' to a response. 'Nothing' means that it's not a response to anything.
 getResponseType :: Messages.ServerMessage -> Maybe ResponseType
 getResponseType Messages.Welcome{} = Nothing
-getResponseType Messages.Nameplates{} = Just "nameplates"
-getResponseType Messages.Allocated{} = Just "allocated"
-getResponseType Messages.Claimed{} = Just "claimed"
-getResponseType Messages.Released = Just "released"
+getResponseType Messages.Nameplates{} = Just NameplatesResponse
+getResponseType Messages.Allocated{} = Just AllocatedResponse
+getResponseType Messages.Claimed{} = Just ClaimedResponse
+getResponseType Messages.Released = Just ReleasedResponse
 getResponseType Messages.Message{} = Nothing
-getResponseType Messages.Closed = Just "closed"
+getResponseType Messages.Closed = Just ClosedResponse
 getResponseType Messages.Ack = Nothing
-getResponseType Messages.Pong{} = Just "pong"
+getResponseType Messages.Pong{} = Just PongResponse
 getResponseType Messages.Error{} = Nothing -- XXX: Alternatively, get the response type of the original message?
 
 -- | Connection to a Rendezvous server.
