@@ -176,27 +176,29 @@ gotResponse Conn{pendingVar} responseType message = do
       putTMVar box message
       pure Nothing
 
+-- | Called when we receive a message (possibly a response) from the server.
+gotMessage :: Connection -> Messages.ServerMessage -> STM (Maybe ServerError)
+gotMessage conn msg =
+  case getResponseType msg of
+    Nothing ->
+      case msg of
+        Messages.Ack -> pure Nothing  -- Skip Ack, because there's no point in handling it.
+        welcome@Messages.Welcome{} -> pure (Just (UnexpectedMessage welcome))
+        err@Messages.Error{Messages.errorMessage, Messages.original} ->
+          case expectedResponse original of
+            Nothing -> pure (Just (ErrorForNonRequest errorMessage original))
+            Just responseType -> gotResponse conn responseType err
+        Messages.Message{} -> notImplemented  -- TODO: Implement message handling!
+        _ -> panic $ "Impossible code. No response type for " <> show msg  -- XXX: Pretty sure we can design this away.
+    Just responseType -> gotResponse conn responseType msg
+
 -- | Read a message from the server. If it's a response, make sure we handle it.
 readMessage :: HasCallStack => Connection -> IO (Maybe ServerError)
 readMessage conn = do
   msg' <- receive conn
   case msg' of
     Left parseError -> pure (Just parseError)
-    Right msg ->
-      case getResponseType msg of
-        Nothing ->
-          case msg of
-            Messages.Ack -> pure Nothing  -- Skip Ack, because there's no point in handling it.
-            welcome@Messages.Welcome{} -> pure (Just (UnexpectedMessage welcome))
-            err@Messages.Error{Messages.errorMessage, Messages.original} ->
-              case expectedResponse original of
-                Nothing -> pure (Just (ErrorForNonRequest errorMessage original))
-                Just responseType ->
-                  atomically $ gotResponse conn responseType err
-            Messages.Message{} -> notImplemented  -- TODO: Implement message handling!
-            _ -> panic $ "Impossible code. No response type for " <> show msg  -- XXX: Pretty sure we can design this away.
-        Just responseType ->
-          atomically $ gotResponse conn responseType msg
+    Right msg -> atomically $ gotMessage conn msg
 
 -- | Run a Magic Wormhole Rendezvous client.
 --
