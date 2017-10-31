@@ -8,6 +8,7 @@ import Protolude
 
 import qualified Options.Applicative as Opt
 
+import qualified MagicWormhole.Internal.Messages as Messages
 import qualified MagicWormhole.Internal.Rendezvous as Rendezvous
 import MagicWormhole.Internal.WebSockets (WebSocketEndpoint(..), parseWebSocketEndpoint)
 
@@ -55,8 +56,8 @@ app command conn = do
     nameplate <- ExceptT $ Rendezvous.allocate conn
     mailbox <- ExceptT $ Rendezvous.claim conn nameplate
     liftIO $ Rendezvous.open conn mailbox  -- XXX: I guess we should run `close` in the case of exceptions?
-    liftIO $ Rendezvous.add conn (Rendezvous.Phase "foo") (Rendezvous.Body "hahaha")
-    ExceptT $ Rendezvous.close conn (Just mailbox) (Just Rendezvous.Happy)
+    liftIO $ Rendezvous.add conn (Messages.Phase "foo") (Messages.Body "hahaha")
+    ExceptT $ Rendezvous.close conn (Just mailbox) (Just Messages.Happy)
   case result of
     Left err -> die $ "Failed to " <> show command <> ": " <> show err
     Right _ -> pass
@@ -69,5 +70,5 @@ main = do
     Left err -> die $ "Server rejected connection: " <> show err
     Right _ -> pass
   where
-    appID = Rendezvous.AppID "jml.io/hocus-pocus"
-    side = Rendezvous.Side "treebeard"
+    appID = Messages.AppID "jml.io/hocus-pocus"
+    side = Messages.Side "treebeard"

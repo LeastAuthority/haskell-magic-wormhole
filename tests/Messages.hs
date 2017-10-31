@@ -1,4 +1,4 @@
-module Rendezvous (tests) where
+module Messages (tests) where
 
 import Protolude
 
@@ -9,7 +9,7 @@ import qualified Hedgehog.Range as Range
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.Hedgehog (testProperty)
 
-import MagicWormhole.Internal.Rendezvous
+import MagicWormhole.Internal.Messages
   ( ClientMessage(..)
   , ServerMessage(..)
   , AppID(..)

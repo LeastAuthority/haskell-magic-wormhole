@@ -4,13 +4,13 @@ import Protolude
 
 import Test.Tasty (defaultMain, testGroup)
 
-import qualified Rendezvous
+import qualified Messages
 import qualified WebSockets
 
 main :: IO ()
 main = sequence tests >>= defaultMain . testGroup "MagicWormhole"
   where
     tests =
-      [ Rendezvous.tests
+      [ Messages.tests
       , WebSockets.tests
       ]
