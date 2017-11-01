@@ -131,22 +131,22 @@ data Connection
     -- ServerMessage both type variables, and instead implement something that
     -- just matches requests with responses and shoves unmatched ones to a
     -- channel.
-    pendingVar :: TVar (HashMap ResponseType (TMVar Messages.ServerMessage))
+    connState :: ConnectionState
   }
+
+newtype ConnectionState = ConnectionState { _pendingVar :: TVar (HashMap ResponseType (TMVar Messages.ServerMessage)) } deriving (Eq)
 
 -- | Initialize a new Magic Wormhole Rendezvous connection.
 --
 -- Will generally want to use 'connect' instead.
-newConnection :: WS.Connection -> STM Connection
-newConnection ws = do
-  pendingVar' <- newTVar mempty
-  pure Conn { wsConn = ws, pendingVar = pendingVar' }
+newConnectionState :: STM ConnectionState
+newConnectionState = ConnectionState <$> newTVar mempty
 
 -- | Tell the connection that we expect a response of the given type.
 --
 -- Will fail with a 'ClientError' if we are already expecting a response of this type.
-expectResponse :: Connection -> ResponseType -> STM (Either ClientError (TMVar Messages.ServerMessage))
-expectResponse Conn{pendingVar} responseType = do
+expectResponse :: ConnectionState -> ResponseType -> STM (Either ClientError (TMVar Messages.ServerMessage))
+expectResponse (ConnectionState pendingVar) responseType = do
   pending <- readTVar pendingVar
   case HashMap.lookup responseType pending of
     Nothing -> do
@@ -155,17 +155,17 @@ expectResponse Conn{pendingVar} responseType = do
       pure (Right box)
     Just _ -> pure (Left (AlreadySent responseType))
 
-waitForResponse :: Connection -> ResponseType -> TMVar Messages.ServerMessage -> STM Messages.ServerMessage
-waitForResponse conn responseType box = do
+waitForResponse :: ConnectionState -> ResponseType -> TMVar Messages.ServerMessage -> STM Messages.ServerMessage
+waitForResponse (ConnectionState pendingVar) responseType box = do
   response <- takeTMVar box
-  modifyTVar' (pendingVar conn) (HashMap.delete responseType)
+  modifyTVar' pendingVar (HashMap.delete responseType)
   pure response
 
 -- | Called when we have received a response from the server.
 --
 -- Tells anything waiting for the response that they can stop waiting now.
-gotResponse :: Connection -> ResponseType -> Messages.ServerMessage -> STM (Maybe ServerError)
-gotResponse Conn{pendingVar} responseType message = do
+gotResponse :: ConnectionState -> ResponseType -> Messages.ServerMessage -> STM (Maybe ServerError)
+gotResponse (ConnectionState pendingVar) responseType message = do
   pending <- readTVar pendingVar
   case HashMap.lookup responseType pending of
     Nothing -> pure (Just (ResponseWithoutRequest responseType message))
@@ -177,8 +177,8 @@ gotResponse Conn{pendingVar} responseType message = do
       pure Nothing
 
 -- | Called when we receive a message (possibly a response) from the server.
-gotMessage :: Connection -> Messages.ServerMessage -> STM (Maybe ServerError)
-gotMessage conn msg =
+gotMessage :: ConnectionState -> Messages.ServerMessage -> STM (Maybe ServerError)
+gotMessage connState msg =
   case getResponseType msg of
     Nothing ->
       case msg of
@@ -187,18 +187,18 @@ gotMessage conn msg =
         err@Messages.Error{Messages.errorMessage, Messages.original} ->
           case expectedResponse original of
             Nothing -> pure (Just (ErrorForNonRequest errorMessage original))
-            Just responseType -> gotResponse conn responseType err
+            Just responseType -> gotResponse connState responseType err
         Messages.Message{} -> notImplemented  -- TODO: Implement message handling!
         _ -> panic $ "Impossible code. No response type for " <> show msg  -- XXX: Pretty sure we can design this away.
-    Just responseType -> gotResponse conn responseType msg
+    Just responseType -> gotResponse connState responseType msg
 
 -- | Read a message from the server. If it's a response, make sure we handle it.
-readMessage :: HasCallStack => Connection -> IO (Maybe ServerError)
-readMessage conn = do
-  msg' <- receive conn
+readMessage :: HasCallStack => WS.Connection -> ConnectionState -> IO (Maybe ServerError)
+readMessage ws connState = do
+  msg' <- receive ws
   case msg' of
     Left parseError -> pure (Just parseError)
-    Right msg -> atomically $ gotMessage conn msg
+    Right msg -> atomically $ gotMessage connState msg
 
 -- | Run a Magic Wormhole Rendezvous client.
 --
@@ -206,61 +206,52 @@ readMessage conn = do
 runClient :: HasCallStack => WebSocketEndpoint -> Messages.AppID -> Messages.Side -> (Connection -> IO a) -> IO (Either ServerError a)
 runClient (WebSocketEndpoint host port path) appID side' app =
   Socket.withSocketsDo . WS.runClient host port path $ \ws -> do
-    conn' <- connect ws
-    case conn' of
+    welcome' <- receive ws
+    case welcome' of
       Left err -> pure (Left err)
-      Right conn -> do
-        bind conn appID side'
+      Right Messages.Welcome {Messages.welcomeErrorMessage = Just err} -> pure . Left . Unwelcome $ err
+      Right Messages.Welcome {Messages.welcomeErrorMessage = Nothing} -> do
+        bind ws appID side'
+        connState <- atomically newConnectionState
         -- TODO: Currently discards any ServerErrors that occur while reading.
         -- Find a way to usefully report these errors.
-        Right <$> withAsync (forever (void (readMessage conn)))
-          (\_ -> app conn)
-
--- | Establish a Magic Wormhole connection.
---
--- Must be called as the first thing after opening a websocket connection to a
--- Rendezvous server.
---
--- Receives the "welcome" message. If the message contains an error, returns
--- that as Left, otherwise return a connection.
-connect :: HasCallStack => WS.Connection -> IO (Either ServerError Connection)
-connect conn = do
-  welcome <- eitherDecode <$> WS.receiveData conn
-  case welcome of
-    Left parseError -> pure . Left . ParseError $ parseError
-    Right Messages.Welcome {Messages.welcomeErrorMessage = Just errMsg} -> pure . Left . Unwelcome $ errMsg
-    Right Messages.Welcome {Messages.welcomeErrorMessage = Nothing} -> Right <$> atomically (newConnection conn)
-    Right unexpected -> pure . Left . UnexpectedMessage $ unexpected
+        Right <$> withAsync (forever (void (readMessage ws connState)))
+          (\_ -> app Conn { wsConn = ws , connState = connState })
+      Right unexpected -> pure . Left . UnexpectedMessage $ unexpected
 
 -- | Receive a wormhole message from a websocket. Blocks until a message is received.
 -- Returns an error string if we cannot parse the message as a valid wormhole 'Message'.
 -- Throws exceptions if the underlying connection is closed or there is some error at the
 -- websocket level.
-receive :: HasCallStack => Connection -> IO (Either ServerError Messages.ServerMessage)
-receive = map (bimap ParseError identity . eitherDecode) . WS.receiveData . wsConn
+receive :: HasCallStack => WS.Connection -> IO (Either ServerError Messages.ServerMessage)
+receive = map (bimap ParseError identity . eitherDecode) . WS.receiveData
 
 -- | Send a message to the Rendezvous server that we don't expect a response for.
-send :: HasCallStack => Connection -> Messages.ClientMessage -> IO ()
-send conn req = WS.sendBinaryData (wsConn conn) (encode req)
+send :: HasCallStack => WS.Connection -> Messages.ClientMessage -> IO ()
+send ws req = WS.sendBinaryData ws (encode req)
 
 -- | Make a request to the rendezvous server.
-rpc :: HasCallStack => Connection -> Messages.ClientMessage -> IO (Either RendezvousError Messages.ServerMessage)
-rpc conn req =
+rpc :: HasCallStack => WS.Connection -> ConnectionState -> Messages.ClientMessage -> IO (Either RendezvousError Messages.ServerMessage)
+rpc ws connState req =
   case expectedResponse req of
     Nothing ->
       -- XXX: Pretty sure we can juggle things around at the type level
       -- to remove this check. (i.e. make a type for RPC requests).
       pure (Left (ClientError (NotAnRPC req)))
     Just responseType -> do
-      box' <- atomically $ expectResponse conn responseType
+      box' <- atomically $ expectResponse connState responseType
       case box' of
         Left clientError -> pure (Left (ClientError clientError))
         Right box -> do
-          send conn req
-          response <- atomically $ waitForResponse conn responseType box
+          send ws req
+          response <- atomically $ waitForResponse connState responseType box
           pure $ case response of
                    Messages.Error reason original -> Left (ClientError (BadRequest reason original))
                    response' -> Right response'
+
+-- | Convenience method for calling 'rpc' while we decouple state handling from websockets.
+rpc' :: HasCallStack => Connection -> Messages.ClientMessage -> IO (Either RendezvousError Messages.ServerMessage)
+rpc' conn = rpc (wsConn conn) (connState conn)
 
 -- | Set the application ID and side for the rest of this connection.
 --
@@ -268,8 +259,8 @@ rpc conn req =
 -- way to tell if it has had its effect.
 --
 -- See https://github.com/warner/magic-wormhole/issues/261
-bind :: HasCallStack => Connection -> Messages.AppID -> Messages.Side -> IO ()
-bind conn appID side' = send conn (Messages.Bind appID side')
+bind :: HasCallStack => WS.Connection -> Messages.AppID -> Messages.Side -> IO ()
+bind ws appID side' = send ws (Messages.Bind appID side')
 
 -- | Ping the server.
 --
@@ -277,7 +268,7 @@ bind conn appID side' = send conn (Messages.Bind appID side')
 -- keep the connection alive.
 ping :: HasCallStack => Connection -> Int -> IO (Either RendezvousError Int)
 ping conn n = do
-  response <- rpc conn (Messages.Ping n)
+  response <- rpc' conn (Messages.Ping n)
   pure $ case response of
     Left err -> Left err
     Right (Messages.Pong n') -> Right n'
@@ -286,7 +277,7 @@ ping conn n = do
 -- | List the nameplates on the server.
 list :: HasCallStack => Connection -> IO (Either RendezvousError [Messages.Nameplate])
 list conn = do
-  response <- rpc conn Messages.List
+  response <- rpc' conn Messages.List
   pure $ case response of
     Left err -> Left err
     Right (Messages.Nameplates nameplates) -> Right nameplates
@@ -295,7 +286,7 @@ list conn = do
 -- | Allocate a nameplate on the server.
 allocate :: HasCallStack => Connection -> IO (Either RendezvousError Messages.Nameplate)
 allocate conn = do
-  response <- rpc conn Messages.Allocate
+  response <- rpc' conn Messages.Allocate
   pure $ case response of
     Left err -> Left err
     Right (Messages.Allocated nameplate) -> Right nameplate
@@ -304,7 +295,7 @@ allocate conn = do
 -- | Claim a nameplate on the server.
 claim :: HasCallStack => Connection -> Messages.Nameplate -> IO (Either RendezvousError Messages.Mailbox)
 claim conn nameplate = do
-  response <- rpc conn (Messages.Claim nameplate)
+  response <- rpc' conn (Messages.Claim nameplate)
   pure $ case response of
     Left err -> Left err
     Right (Messages.Claimed mailbox) -> Right mailbox
@@ -318,7 +309,7 @@ claim conn nameplate = do
 -- namespace.
 release :: HasCallStack => Connection -> Maybe Messages.Nameplate -> IO (Either RendezvousError ())
 release conn nameplate' = do
-  response <- rpc conn (Messages.Release nameplate')
+  response <- rpc' conn (Messages.Release nameplate')
   pure $ case response of
     Left err -> Left err
     Right Messages.Released -> Right ()
@@ -330,12 +321,12 @@ release conn nameplate' = do
 --
 -- TODO: Find out what happens if we call 'open' when we already have a mailbox open.
 open :: HasCallStack => Connection -> Messages.Mailbox -> IO ()
-open conn mailbox = send conn (Messages.Open mailbox)
+open conn mailbox = send (wsConn conn) (Messages.Open mailbox)
 
 -- | Close a mailbox on the server.
 close :: HasCallStack => Connection -> Maybe Messages.Mailbox -> Maybe Messages.Mood -> IO (Either RendezvousError ())
 close conn mailbox' mood' = do
-  response <- rpc conn (Messages.Close mailbox' mood')
+  response <- rpc' conn (Messages.Close mailbox' mood')
   pure $ case response of
     Left err -> Left err
     Right Messages.Closed -> Right ()
@@ -345,7 +336,7 @@ close conn mailbox' mood' = do
 --
 -- XXX: Should we provide a version that blocks until the message comes back to us?
 add :: HasCallStack => Connection -> Messages.Phase -> Messages.Body -> IO ()
-add conn phase body = send conn (Messages.Add phase body)
+add conn phase body = send (wsConn conn) (Messages.Add phase body)
 
 -- | Called when an RPC receives a message as a response that does not match
 -- the request.
