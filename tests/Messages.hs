@@ -12,6 +12,7 @@ import Test.Tasty.Hedgehog (testProperty)
 import MagicWormhole.Internal.Messages
   ( ClientMessage(..)
   , ServerMessage(..)
+  , MailboxMessage(..)
   , AppID(..)
   , Side(..)
   , MessageID(..)
@@ -77,9 +78,12 @@ serverMessages = Gen.choice
   , Allocated <$> genNameplates
   , Claimed <$> mailboxes
   , pure Released
-  , Message <$> sides <*> phases <*> messageIDs <*> bodies
+  , Message <$> mailboxMessages
   , pure Closed
   , pure Ack
   , Pong <$> Gen.int Range.linearBounded
   , Error <$> Gen.text (Range.linear 0 100) Gen.unicode <*> clientMessages
   ]
+
+mailboxMessages :: MonadGen m => m MailboxMessage
+mailboxMessages = MailboxMessage <$> sides <*> phases <*> messageIDs <*> bodies

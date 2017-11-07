@@ -4,6 +4,7 @@ module MagicWormhole.Internal.Messages
   ( ClientMessage(..)
   , ServerMessage(..)
   , AppID(..)
+  , MailboxMessage(..)
   , MessageID(..)
   , Side(..)
   , Phase(..)
@@ -73,17 +74,7 @@ data ServerMessage
   | -- | Sent in response to "release"
     Released
   | -- | A message sent to the mailbox
-    Message
-    {
-      -- | Which side sent the message. Might be our side.
-      side :: Side
-    , -- | Which phase of the client protocol we are in.
-      phase :: Phase
-      -- | An identifier for the message. Unused.
-    , messageID :: MessageID
-    , -- | The body of the message. To be interpreted by the client protocol.
-      body :: Body
-    }
+    Message MailboxMessage
   | -- | Sent in response to "close"
     Closed
   | -- | Sent immediately after every message. Unused.
@@ -112,7 +103,7 @@ instance FromJSON ServerMessage where
       "allocated" -> Allocated <$> v .: "nameplate"
       "claimed" -> Claimed <$> v .: "mailbox"
       "released" -> pure Released
-      "message" -> Message <$> v .: "side" <*> v .: "phase" <*> v .: "id" <*> v .: "body"
+      "message" -> Message <$> (MailboxMessage <$> v .: "side" <*> v .: "phase" <*> v .: "id" <*> v .: "body")
       "closed" -> pure Closed
       "ack" -> pure Ack
       "pong" -> Pong <$> v .: "pong"
@@ -134,7 +125,7 @@ instance ToJSON ServerMessage where
   toJSON (Claimed mailbox') =
     objectWithType "claimed" [ "mailbox" .= mailbox' ]
   toJSON Released = objectWithType "released" []
-  toJSON (Message side' phase' id body') =
+  toJSON (Message (MailboxMessage side' phase' id body')) =
     objectWithType "message"
     [ "phase" .= phase'
     , "side" .= side'
@@ -302,3 +293,17 @@ instance FromJSON MessageID where
       _ -> fail $ "Could not parse MessageID: " <> toS s
   parseJSON unknown = typeMismatch "MessageID" unknown
 
+
+-- | A message sent to a mailbox.
+data MailboxMessage
+  = MailboxMessage
+    {
+      -- | Which side sent the message. Might be our side.
+      side :: Side
+    , -- | Which phase of the client protocol we are in.
+      phase :: Phase
+      -- | An identifier for the message. Unused.
+    , messageID :: MessageID
+    , -- | The body of the message. To be interpreted by the client protocol.
+      body :: Body
+    } deriving (Eq, Show)
