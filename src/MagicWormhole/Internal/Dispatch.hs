@@ -23,6 +23,7 @@ import Control.Concurrent.STM
   , putTMVar
   , takeTMVar
   , TChan
+  , newTChan
   , readTChan
   , writeTChan
   )
@@ -38,17 +39,18 @@ data ConnectionState
   { _pendingVar :: TVar (HashMap ResponseType (TMVar Messages.ServerMessage))
   , _inputChan :: TChan Messages.ServerMessage
   , _outputChan :: TChan Messages.ClientMessage
+  , _messageChan :: TChan Messages.MailboxMessage
   } deriving (Eq)
 
 send :: ConnectionState -> Messages.ClientMessage -> STM ()
-send (ConnectionState _ _ outputChan) = writeTChan outputChan
+send (ConnectionState _ _ outputChan _) = writeTChan outputChan
 
 receive :: ConnectionState -> STM Messages.ServerMessage
-receive (ConnectionState _ inputChan _) = readTChan inputChan
+receive (ConnectionState _ inputChan _ _) = readTChan inputChan
 
 with :: TChan Messages.ServerMessage -> TChan Messages.ClientMessage -> (ConnectionState -> IO a) -> IO a
 with inputChan outputChan action = do
-  connState <- atomically $ ConnectionState <$> newTVar mempty <*> pure inputChan <*> pure outputChan
+  connState <- atomically $ ConnectionState <$> newTVar mempty <*> pure inputChan <*> pure outputChan <*> newTChan
   withAsync (readMessages connState) $
     \_ -> action connState
   where
@@ -82,7 +84,7 @@ rpc connState req =
 --
 -- Will fail with a 'ClientError' if we are already expecting a response of this type.
 expectResponse :: ConnectionState -> ResponseType -> STM (Either ClientError (TMVar Messages.ServerMessage))
-expectResponse (ConnectionState pendingVar _ _) responseType = do
+expectResponse (ConnectionState pendingVar _ _ _) responseType = do
   pending <- readTVar pendingVar
   case HashMap.lookup responseType pending of
     Nothing -> do
@@ -92,7 +94,7 @@ expectResponse (ConnectionState pendingVar _ _) responseType = do
     Just _ -> pure (Left (AlreadySent responseType))
 
 waitForResponse :: ConnectionState -> ResponseType -> TMVar Messages.ServerMessage -> STM Messages.ServerMessage
-waitForResponse (ConnectionState pendingVar _ _) responseType box = do
+waitForResponse (ConnectionState pendingVar _ _ _) responseType box = do
   response <- takeTMVar box
   modifyTVar' pendingVar (HashMap.delete responseType)
   pure response
@@ -101,7 +103,7 @@ waitForResponse (ConnectionState pendingVar _ _) responseType box = do
 --
 -- Tells anything waiting for the response that they can stop waiting now.
 gotResponse :: ConnectionState -> ResponseType -> Messages.ServerMessage -> STM (Maybe ServerError)
-gotResponse (ConnectionState pendingVar _ _) responseType message = do
+gotResponse (ConnectionState pendingVar _ _ _) responseType message = do
   pending <- readTVar pendingVar
   case HashMap.lookup responseType pending of
     Nothing -> pure (Just (ResponseWithoutRequest responseType message))
