@@ -8,6 +8,7 @@ import Protolude
 
 import qualified Options.Applicative as Opt
 
+import qualified MagicWormhole.Internal.Dispatch as Dispatch
 import qualified MagicWormhole.Internal.Messages as Messages
 import qualified MagicWormhole.Internal.Rendezvous as Rendezvous
 import MagicWormhole.Internal.WebSockets (WebSocketEndpoint(..), parseWebSocketEndpoint)
@@ -49,7 +50,7 @@ makeOptions :: Text -> Opt.Parser a -> Opt.ParserInfo a
 makeOptions headerText parser = Opt.info (Opt.helper <*> parser) (Opt.fullDesc <> Opt.header (toS headerText))
 
 -- | Execute 'Command' against a Wormhole Rendezvous server.
-app :: Command -> Rendezvous.Connection -> IO ()
+app :: Command -> Dispatch.ConnectionState -> IO ()
 app command conn = do
   result <- runExceptT $ do
     print command

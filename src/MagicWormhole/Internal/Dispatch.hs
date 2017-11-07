@@ -3,13 +3,11 @@
 {-# LANGUAGE NamedFieldPuns #-}
 module MagicWormhole.Internal.Dispatch
   ( ConnectionState
-  , newConnectionState
-  , gotMessage
-  , expectedResponse
-  , expectResponse
-  , waitForResponse
-  , ServerError(UnexpectedMessage)
-  , AlreadySentError
+  , Error
+  , rpc
+  , send
+  , receive
+  , with
   ) where
 
 import Protolude
@@ -24,6 +22,9 @@ import Control.Concurrent.STM
   , newEmptyTMVar
   , putTMVar
   , takeTMVar
+  , TChan
+  , readTChan
+  , writeTChan
   )
 
 import qualified MagicWormhole.Internal.Messages as Messages
@@ -32,19 +33,56 @@ import Data.Hashable (Hashable)
 import Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as HashMap
 
-newtype ConnectionState = ConnectionState { _pendingVar :: TVar (HashMap ResponseType (TMVar Messages.ServerMessage)) } deriving (Eq)
+data ConnectionState
+  = ConnectionState
+  { _pendingVar :: TVar (HashMap ResponseType (TMVar Messages.ServerMessage))
+  , _inputChan :: TChan Messages.ServerMessage
+  , _outputChan :: TChan Messages.ClientMessage
+  } deriving (Eq)
 
--- | Initialize a new Magic Wormhole Rendezvous connection.
---
--- Will generally want to use 'connect' instead.
-newConnectionState :: STM ConnectionState
-newConnectionState = ConnectionState <$> newTVar mempty
+send :: ConnectionState -> Messages.ClientMessage -> STM ()
+send (ConnectionState _ _ outputChan) = writeTChan outputChan
+
+receive :: ConnectionState -> STM Messages.ServerMessage
+receive (ConnectionState _ inputChan _) = readTChan inputChan
+
+with :: TChan Messages.ServerMessage -> TChan Messages.ClientMessage -> (ConnectionState -> IO a) -> IO a
+with inputChan outputChan action = do
+  connState <- atomically $ ConnectionState <$> newTVar mempty <*> pure inputChan <*> pure outputChan
+  withAsync (readMessages connState) $
+    \_ -> action connState
+  where
+    -- | Read messages from the input channel forever, or until we fail to handle one.
+    readMessages connState = do
+      msg <- atomically $ receive connState
+      result <- atomically $ gotMessage connState msg
+      case result of
+        Just err -> pure err
+        Nothing -> readMessages connState
+
+rpc :: HasCallStack => ConnectionState -> Messages.ClientMessage -> IO (Either Error Messages.ServerMessage)
+rpc connState req =
+  case expectedResponse req of
+    Nothing ->
+      -- XXX: Pretty sure we can juggle things around at the type level
+      -- to remove this check. (i.e. make a type for RPC requests).
+      pure (Left (ClientError (NotAnRPC req)))
+    Just responseType -> do
+      box' <- atomically $ expectResponse connState responseType
+      case box' of
+        Left clientError -> pure (Left (ClientError clientError))
+        Right box -> do
+          atomically $ send connState req
+          response <- atomically $ waitForResponse connState responseType box
+          pure $ case response of
+                   Messages.Error reason original -> Left (ClientError (BadRequest reason original))
+                   response' -> Right response'
 
 -- | Tell the connection that we expect a response of the given type.
 --
 -- Will fail with a 'ClientError' if we are already expecting a response of this type.
-expectResponse :: ConnectionState -> ResponseType -> STM (Either AlreadySentError (TMVar Messages.ServerMessage))
-expectResponse (ConnectionState pendingVar) responseType = do
+expectResponse :: ConnectionState -> ResponseType -> STM (Either ClientError (TMVar Messages.ServerMessage))
+expectResponse (ConnectionState pendingVar _ _) responseType = do
   pending <- readTVar pendingVar
   case HashMap.lookup responseType pending of
     Nothing -> do
@@ -54,7 +92,7 @@ expectResponse (ConnectionState pendingVar) responseType = do
     Just _ -> pure (Left (AlreadySent responseType))
 
 waitForResponse :: ConnectionState -> ResponseType -> TMVar Messages.ServerMessage -> STM Messages.ServerMessage
-waitForResponse (ConnectionState pendingVar) responseType box = do
+waitForResponse (ConnectionState pendingVar _ _) responseType box = do
   response <- takeTMVar box
   modifyTVar' pendingVar (HashMap.delete responseType)
   pure response
@@ -63,7 +101,7 @@ waitForResponse (ConnectionState pendingVar) responseType box = do
 --
 -- Tells anything waiting for the response that they can stop waiting now.
 gotResponse :: ConnectionState -> ResponseType -> Messages.ServerMessage -> STM (Maybe ServerError)
-gotResponse (ConnectionState pendingVar) responseType message = do
+gotResponse (ConnectionState pendingVar _ _) responseType message = do
   pending <- readTVar pendingVar
   case HashMap.lookup responseType pending of
     Nothing -> pure (Just (ResponseWithoutRequest responseType message))
@@ -153,8 +191,19 @@ data ServerError
   deriving (Eq, Show)
 
 -- | Error caused by misusing the client.
-newtype AlreadySentError
+data ClientError
   = -- | We tried to do an RPC while another RPC with the same response type
     -- was in flight. See warner/magic-wormhole#260 for details.
     AlreadySent ResponseType
+    -- | Tried to send a non-RPC as if it were an RPC (i.e. expecting a response).
+  | NotAnRPC Messages.ClientMessage
+    -- | We sent a message that the server could not understand.
+  | BadRequest Text Messages.ClientMessage
   deriving (Eq, Show)
+
+-- | Any possible dispatch error.
+data Error
+  = -- | An error due to misusing the client.
+    ClientError ClientError
+    -- | An error due to weird message from the server.
+  | ServerError ServerError deriving (Eq, Show)
