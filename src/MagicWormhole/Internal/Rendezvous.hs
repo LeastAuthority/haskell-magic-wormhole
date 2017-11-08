@@ -70,12 +70,14 @@ runClient' ws action = do
           putStrLn @Text $ "[ERROR] " <> show err
           pure (Dispatch.ParseError err)  -- XXX: Terminating readTo doesn't terminate the other threads.
         Right msg -> do
+          putStrLn @Text $ "<<< " <> show msg  -- XXX: Debug
           atomically $ writeTChan chan msg
           readTo chan
 
     writeTo chan = forever $ do
       msg <- atomically $ readTChan chan
       WS.sendBinaryData ws (encode msg)
+      putStrLn @Text $ ">>> " <> show msg -- XXX: Debug
 
 -- | Make a request to the rendezvous server.
 rpc :: HasCallStack => Dispatch.ConnectionState -> Messages.ClientMessage -> IO (Either Dispatch.Error Messages.ServerMessage)
