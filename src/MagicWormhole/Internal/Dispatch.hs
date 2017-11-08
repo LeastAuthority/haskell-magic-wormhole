@@ -36,21 +36,29 @@ import qualified Data.HashMap.Lazy as HashMap
 
 data ConnectionState
   = ConnectionState
-  { _pendingVar :: TVar (HashMap ResponseType (TMVar Messages.ServerMessage))
-  , _inputChan :: TChan Messages.ServerMessage
-  , _outputChan :: TChan Messages.ClientMessage
+  { pendingVar :: TVar (HashMap ResponseType (TMVar Messages.ServerMessage))
+  , inputChan :: TChan Messages.ServerMessage
+  , outputChan :: TChan Messages.ClientMessage
   , _messageChan :: TChan Messages.MailboxMessage
   } deriving (Eq)
 
+new :: TChan Messages.ServerMessage -> TChan Messages.ClientMessage -> STM ConnectionState
+new inputChan outputChan
+  = ConnectionState
+  <$> newTVar mempty
+  <*> pure inputChan
+  <*> pure outputChan
+  <*> newTChan
+
 send :: ConnectionState -> Messages.ClientMessage -> STM ()
-send (ConnectionState _ _ outputChan _) = writeTChan outputChan
+send connState = writeTChan (outputChan connState)
 
 receive :: ConnectionState -> STM Messages.ServerMessage
-receive (ConnectionState _ inputChan _ _) = readTChan inputChan
+receive connState = readTChan (inputChan connState)
 
 with :: TChan Messages.ServerMessage -> TChan Messages.ClientMessage -> (ConnectionState -> IO a) -> IO a
 with inputChan outputChan action = do
-  connState <- atomically $ ConnectionState <$> newTVar mempty <*> pure inputChan <*> pure outputChan <*> newTChan
+  connState <- atomically $ new inputChan outputChan
   withAsync (readMessages connState) $
     \_ -> action connState
   where
@@ -84,27 +92,27 @@ rpc connState req =
 --
 -- Will fail with a 'ClientError' if we are already expecting a response of this type.
 expectResponse :: ConnectionState -> ResponseType -> STM (Either ClientError (TMVar Messages.ServerMessage))
-expectResponse (ConnectionState pendingVar _ _ _) responseType = do
-  pending <- readTVar pendingVar
+expectResponse connState responseType = do
+  pending <- readTVar (pendingVar connState)
   case HashMap.lookup responseType pending of
     Nothing -> do
       box <- newEmptyTMVar
-      writeTVar pendingVar (HashMap.insert responseType box pending)
+      writeTVar (pendingVar connState) (HashMap.insert responseType box pending)
       pure (Right box)
     Just _ -> pure (Left (AlreadySent responseType))
 
 waitForResponse :: ConnectionState -> ResponseType -> TMVar Messages.ServerMessage -> STM Messages.ServerMessage
-waitForResponse (ConnectionState pendingVar _ _ _) responseType box = do
+waitForResponse connState responseType box = do
   response <- takeTMVar box
-  modifyTVar' pendingVar (HashMap.delete responseType)
+  modifyTVar' (pendingVar connState) (HashMap.delete responseType)
   pure response
 
 -- | Called when we have received a response from the server.
 --
 -- Tells anything waiting for the response that they can stop waiting now.
 gotResponse :: ConnectionState -> ResponseType -> Messages.ServerMessage -> STM (Maybe ServerError)
-gotResponse (ConnectionState pendingVar _ _ _) responseType message = do
-  pending <- readTVar pendingVar
+gotResponse connState responseType message = do
+  pending <- readTVar (pendingVar connState)
   case HashMap.lookup responseType pending of
     Nothing -> pure (Just (ResponseWithoutRequest responseType message))
     Just box -> do
