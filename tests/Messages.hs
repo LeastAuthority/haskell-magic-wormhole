@@ -13,6 +13,7 @@ import MagicWormhole.Internal.Messages
   ( ClientMessage(..)
   , ServerMessage(..)
   , MailboxMessage(..)
+  , WelcomeMessage(..)
   , AppID(..)
   , Side(..)
   , MessageID(..)
@@ -72,7 +73,7 @@ moods = Gen.element [ Happy, Lonely, Scary, Errory ]
 
 serverMessages :: MonadGen m => m ServerMessage
 serverMessages = Gen.choice
-  [ Welcome <$> Gen.maybe (Gen.text (Range.linear 0 1024) Gen.unicode) <*> Gen.maybe (Gen.text (Range.linear 0 1024) Gen.unicode)
+  [ Welcome <$> welcomeMessages
   -- TODO: Generate rest of possible server messages.
   , Nameplates <$> Gen.list (Range.linear 0 10) genNameplates
   , Allocated <$> genNameplates
@@ -87,3 +88,6 @@ serverMessages = Gen.choice
 
 mailboxMessages :: MonadGen m => m MailboxMessage
 mailboxMessages = MailboxMessage <$> sides <*> phases <*> messageIDs <*> bodies
+
+welcomeMessages :: MonadGen m => m WelcomeMessage
+welcomeMessages = WelcomeMessage <$> Gen.maybe (Gen.text (Range.linear 0 1024) Gen.unicode) <*> Gen.maybe (Gen.text (Range.linear 0 1024) Gen.unicode)

@@ -5,6 +5,7 @@ module MagicWormhole.Internal.Messages
   , ServerMessage(..)
   , AppID(..)
   , MailboxMessage(..)
+  , WelcomeMessage(..)
   , MessageID(..)
   , Side(..)
   , Phase(..)
@@ -49,12 +50,7 @@ import Numeric (readHex, showHex)
 --     make sense after a bind (e.g. allocate)
 data ServerMessage
   = -- | Sent by the server on initial connection.
-    Welcome
-    { -- | A message to be displayed to users when they connect to the server
-      motd :: Maybe Text
-      -- | If present, the server does not want the client to proceed. Here's the reason why.
-    , welcomeErrorMessage :: Maybe Text
-    }
+    Welcome WelcomeMessage
   | -- | Sent in response to "list"
     Nameplates
     {
@@ -96,7 +92,7 @@ instance FromJSON ServerMessage where
     case t of
       "welcome" -> do
         welcome <- v .: "welcome"
-        Welcome <$> welcome .:? "motd" <*> welcome .:? "error"
+        Welcome <$> (WelcomeMessage <$> welcome .:? "motd" <*> welcome .:? "error")
       "nameplates" -> do
         ns <- v .: "nameplates"
         Nameplates <$> sequence [ Nameplate <$> n .: "id" | n <- ns ]
@@ -112,7 +108,7 @@ instance FromJSON ServerMessage where
   parseJSON unknown = typeMismatch "Message" unknown
 
 instance ToJSON ServerMessage where
-  toJSON (Welcome motd' error') =
+  toJSON (Welcome (WelcomeMessage motd' error')) =
     objectWithType "welcome"
     [ "welcome" .= object (catMaybes [ ("motd" .=) <$> motd'
                                      , ("error" .=) <$> error'
@@ -306,4 +302,13 @@ data MailboxMessage
     , messageID :: MessageID
     , -- | The body of the message. To be interpreted by the client protocol.
       body :: Body
+    } deriving (Eq, Show)
+
+-- | Message received on initial connection to the server.
+data WelcomeMessage
+  = WelcomeMessage
+    { -- | A message to be displayed to users when they connect to the server
+      motd :: Maybe Text
+      -- | If present, the server does not want the client to proceed. Here's the reason why.
+    , welcomeErrorMessage :: Maybe Text
     } deriving (Eq, Show)
