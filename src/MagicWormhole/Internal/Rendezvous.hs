@@ -28,7 +28,6 @@ import Control.Concurrent.STM
   , writeTChan
   )
 import Data.Aeson (eitherDecode, encode)
-import Data.String (String)
 import qualified Network.Socket as Socket
 import qualified Network.WebSockets as WS
 
@@ -39,19 +38,19 @@ import MagicWormhole.Internal.WebSockets (WebSocketEndpoint(..))
 -- | Run a Magic Wormhole Rendezvous client.
 --
 -- Will fail with IO (Left ServerError) if the server declares we are unwelcome.
-runClient :: HasCallStack => WebSocketEndpoint -> Messages.AppID -> Messages.Side -> (Dispatch.ConnectionState -> IO a) -> IO (Either ServerError a)
+runClient :: HasCallStack => WebSocketEndpoint -> Messages.AppID -> Messages.Side -> (Dispatch.ConnectionState -> IO a) -> IO (Either Dispatch.ServerError a)
 runClient (WebSocketEndpoint host port path) appID side' app =
   Socket.withSocketsDo . WS.runClient host port path $ \ws ->
     runClient' ws $ \connState -> do
       welcome' <- atomically $ Dispatch.receive connState
       case welcome' of
-        Messages.Welcome {Messages.welcomeErrorMessage = Just err} -> pure . Left . Unwelcome $ err
+        Messages.Welcome {Messages.welcomeErrorMessage = Just err} -> pure . Left . Dispatch.Unwelcome $ err
         Messages.Welcome {Messages.welcomeErrorMessage = Nothing} -> do
           -- TODO: Use motd somehow
           -- TODO: bind & receive welcome in parallel
           bind connState appID side'
           Right <$> app connState
-        unexpected -> pure . Left . UnexpectedMessage $ unexpected
+        unexpected -> pure . Left . Dispatch.UnexpectedMessage $ unexpected
 
 -- XXX: Not sure this split clarifies things. The idea is that this sets up
 -- pumping websocket to channels, but maybe it should just be inlined into
@@ -67,7 +66,9 @@ runClient' ws action = do
     readTo chan = do
       msg' <- eitherDecode <$> WS.receiveData ws
       case msg' of
-        Left err -> pure (ParseError err)
+        Left err -> do
+          putStrLn @Text $ "[ERROR] " <> show err
+          pure (Dispatch.ParseError err)  -- XXX: Terminating readTo doesn't terminate the other threads.
         Right msg -> do
           atomically $ writeTChan chan msg
           readTo chan
@@ -175,13 +176,3 @@ add conn phase body = atomically $ Dispatch.send conn (Messages.Add phase body)
 -- TODO: Try to make this unnecessary.
 unexpectedMessage :: HasCallStack => Messages.ClientMessage -> Messages.ServerMessage -> a
 unexpectedMessage request response = panic $ "Unexpected message: " <> show response <> ", in response to: " <> show request
-
--- | Error due to weirdness from the server.
-data ServerError
-  = -- | Clients are not welcome on the server right now.
-    Unwelcome Text
-    -- | We couldn't understand the message from the server.
-  | ParseError String
-    -- | The server sent us a message we didn't expect.
-  | UnexpectedMessage Messages.ServerMessage
-  deriving (Eq, Show)

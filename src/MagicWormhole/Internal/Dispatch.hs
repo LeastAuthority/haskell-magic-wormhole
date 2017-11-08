@@ -4,6 +4,7 @@
 module MagicWormhole.Internal.Dispatch
   ( ConnectionState
   , Error
+  , ServerError(..)
   , rpc
   , send
   , receive
@@ -33,6 +34,7 @@ import qualified MagicWormhole.Internal.Messages as Messages
 import Data.Hashable (Hashable)
 import Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as HashMap
+import Data.String (String)
 
 data ConnectionState
   = ConnectionState
@@ -67,7 +69,11 @@ with inputChan outputChan action = do
       msg <- atomically $ receive connState
       result <- atomically $ gotMessage connState msg
       case result of
-        Just err -> pure err
+        Just err -> pure err  -- XXX: This needs to throw an exception into
+                              -- the action (or something), because
+                              -- terminating readMessages won't terminate the
+                              -- action, and we currently have no way of
+                              -- communicating this error.
         Nothing -> readMessages connState
 
 rpc :: HasCallStack => ConnectionState -> Messages.ClientMessage -> IO (Either Error Messages.ServerMessage)
@@ -198,6 +204,10 @@ data ServerError
     -- | We received an 'error' message for a message that's not expected to
     -- have a response.
   | ErrorForNonRequest Text Messages.ClientMessage
+  -- | Clients are not welcome on the server right now.
+  | Unwelcome Text
+    -- | We couldn't understand the message from the server.
+  | ParseError String
   deriving (Eq, Show)
 
 -- | Error caused by misusing the client.
