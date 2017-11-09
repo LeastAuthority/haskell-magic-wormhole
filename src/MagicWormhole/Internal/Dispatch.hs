@@ -7,7 +7,6 @@ module MagicWormhole.Internal.Dispatch
   , ServerError(..)
   , rpc
   , send
-  , receive
   , with
   ) where
 
@@ -23,6 +22,7 @@ import Control.Concurrent.STM
   , newEmptyTMVar
   , putTMVar
   , takeTMVar
+  , tryPutTMVar
   , TChan
   , newTChan
   , readTChan
@@ -42,6 +42,7 @@ data ConnectionState
   , inputChan :: TChan Messages.ServerMessage
   , outputChan :: TChan Messages.ClientMessage
   , _messageChan :: TChan Messages.MailboxMessage
+  , motd :: TMVar (Maybe Text)
   } deriving (Eq)
 
 new :: TChan Messages.ServerMessage -> TChan Messages.ClientMessage -> STM ConnectionState
@@ -51,6 +52,7 @@ new inputChan outputChan
   <*> pure inputChan
   <*> pure outputChan
   <*> newTChan
+  <*> newEmptyTMVar
 
 send :: ConnectionState -> Messages.ClientMessage -> STM ()
 send connState = writeTChan (outputChan connState)
@@ -135,7 +137,7 @@ gotMessage connState msg =
     Nothing ->
       case msg of
         Messages.Ack -> pure Nothing  -- Skip Ack, because there's no point in handling it.
-        welcome@Messages.Welcome{} -> pure (Just (UnexpectedMessage welcome))
+        Messages.Welcome welcome -> handleWelcome welcome
         err@Messages.Error{Messages.errorMessage, Messages.original} ->
           case expectedResponse original of
             Nothing -> pure (Just (ErrorForNonRequest errorMessage original))
@@ -143,6 +145,16 @@ gotMessage connState msg =
         Messages.Message{} -> notImplemented  -- TODO: Implement message handling!
         _ -> panic $ "Impossible code. No response type for " <> show msg  -- XXX: Pretty sure we can design this away.
     Just responseType -> gotResponse connState responseType msg
+
+  where
+    handleWelcome welcome =
+      case Messages.welcomeErrorMessage welcome of
+        Just err -> pure (Just (Unwelcome err))
+        Nothing -> do
+          notYet <- tryPutTMVar (motd connState) (Messages.motd welcome)
+          if notYet
+            then pure Nothing
+            else pure (Just (UnexpectedMessage (Messages.Welcome welcome)))
 
 -- | The type of a response.
 --

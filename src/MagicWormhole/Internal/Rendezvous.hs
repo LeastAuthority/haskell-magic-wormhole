@@ -42,23 +42,10 @@ runClient :: HasCallStack => WebSocketEndpoint -> Messages.AppID -> Messages.Sid
 runClient (WebSocketEndpoint host port path) appID side' app =
   Socket.withSocketsDo . WS.runClient host port path $ \ws ->
     runClient' ws $ \connState -> do
-      welcome' <- atomically $ Dispatch.receive connState
-      case welcome' of
-        Messages.Welcome welcomeMsg ->
-          case handleWelcome welcomeMsg of
-            Left err -> pure (Left err)
-            Right _ -> do
-              -- TODO: Use motd somehow
-              -- TODO: bind & receive welcome in parallel
-              bind connState appID side'
-              Right <$> app connState
-        unexpected -> pure . Left . Dispatch.UnexpectedMessage $ unexpected
-
-handleWelcome :: Messages.WelcomeMessage -> Either Dispatch.ServerError (Maybe Text)
-handleWelcome welcome =
-  case Messages.welcomeErrorMessage welcome of
-    Just err -> Left (Dispatch.Unwelcome err)
-    Nothing -> Right (Messages.motd welcome)
+      -- TODO: Use motd somehow
+      -- TODO: bind & receive welcome in parallel
+      bind connState appID side'
+      Right <$> app connState
 
 -- XXX: Not sure this split clarifies things. The idea is that this sets up
 -- pumping websocket to channels, but maybe it should just be inlined into
