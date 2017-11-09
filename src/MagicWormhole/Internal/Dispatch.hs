@@ -98,9 +98,13 @@ with inputChan outputChan action = do
   where
     -- | Read messages from the input channel forever, or until we fail to handle one.
     readMessages session = do
-      -- XXX: Maybe one transaction for these?
-      msg <- atomically $ receive session
-      result <- atomically $ gotMessage session msg
+      -- We read the message from the channel and handle it (either by setting
+      -- the RPC response or forwarding to the mailbox message queue) all in
+      -- one transaction. This means that if an exception occurs, the message
+      -- will remain in the channel.
+      result <- atomically $ do
+        msg <- receive session
+        gotMessage session msg
       case result of
         Just err -> do
           putStrLn @Text $ "[ERROR] " <> show err
