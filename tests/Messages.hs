@@ -76,7 +76,6 @@ moods = Gen.element [ Happy, Lonely, Scary, Errory ]
 serverMessages :: MonadGen m => m ServerMessage
 serverMessages = Gen.choice
   [ Welcome <$> welcomeMessages
-  -- TODO: Generate rest of possible server messages.
   , Nameplates <$> Gen.list (Range.linear 0 10) genNameplates
   , Allocated <$> genNameplates
   , Claimed <$> mailboxes
