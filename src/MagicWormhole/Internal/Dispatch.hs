@@ -131,18 +131,20 @@ gotResponse connState responseType message = do
 -- | Called when we receive a message (possibly a response) from the server.
 gotMessage :: ConnectionState -> Messages.ServerMessage -> STM (Maybe ServerError)
 gotMessage connState msg =
-  case getResponseType msg of
-    Nothing ->
-      case msg of
-        Messages.Ack -> pure Nothing  -- Skip Ack, because there's no point in handling it.
-        Messages.Welcome welcome -> handleWelcome welcome
-        err@Messages.Error{Messages.errorMessage, Messages.original} ->
-          case expectedResponse original of
-            Nothing -> pure (Just (ErrorForNonRequest errorMessage original))
-            Just responseType -> gotResponse connState responseType err
-        Messages.Message{} -> notImplemented  -- TODO: Implement message handling!
-        _ -> panic $ "Impossible code. No response type for " <> show msg  -- XXX: Pretty sure we can design this away.
-    Just responseType -> gotResponse connState responseType msg
+  case msg of
+    Messages.Ack -> pure Nothing  -- Skip Ack, because there's no point in handling it.
+    Messages.Welcome welcome -> handleWelcome welcome
+    Messages.Error{Messages.errorMessage, Messages.original} ->
+      case expectedResponse original of
+        Nothing -> pure (Just (ErrorForNonRequest errorMessage original))
+        Just responseType -> gotResponse connState responseType msg
+    Messages.Message{} -> notImplemented  -- TODO: Implement message handling!
+    Messages.Nameplates{} -> gotResponse connState NameplatesResponse msg
+    Messages.Allocated{} -> gotResponse connState AllocatedResponse msg
+    Messages.Claimed{} -> gotResponse connState ClaimedResponse msg
+    Messages.Released -> gotResponse connState ReleasedResponse msg
+    Messages.Closed -> gotResponse connState ClosedResponse msg
+    Messages.Pong{} -> gotResponse connState PongResponse msg
 
   where
     handleWelcome welcome =
@@ -189,20 +191,6 @@ expectedResponse Messages.Open{} = Nothing
 expectedResponse Messages.Add{} = Nothing
 expectedResponse Messages.Close{} = Just ClosedResponse
 expectedResponse Messages.Ping{} = Just PongResponse
-
--- | Map 'ServerMessage' to a response. 'Nothing' means that it's not a response to anything.
-getResponseType :: Messages.ServerMessage -> Maybe ResponseType
-getResponseType Messages.Welcome{} = Nothing
-getResponseType Messages.Nameplates{} = Just NameplatesResponse
-getResponseType Messages.Allocated{} = Just AllocatedResponse
-getResponseType Messages.Claimed{} = Just ClaimedResponse
-getResponseType Messages.Released = Just ReleasedResponse
-getResponseType Messages.Message{} = Nothing
-getResponseType Messages.Closed = Just ClosedResponse
-getResponseType Messages.Ack = Nothing
-getResponseType Messages.Pong{} = Just PongResponse
-getResponseType Messages.Error{} = Nothing -- XXX: Alternatively, get the response type of the original message?
-
 
 -- | Error due to weirdness from the server.
 data ServerError
