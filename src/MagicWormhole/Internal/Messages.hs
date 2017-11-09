@@ -99,7 +99,7 @@ instance FromJSON ServerMessage where
       "allocated" -> Allocated <$> v .: "nameplate"
       "claimed" -> Claimed <$> v .: "mailbox"
       "released" -> pure Released
-      "message" -> Message <$> (MailboxMessage <$> v .: "side" <*> v .: "phase" <*> v .: "id" <*> v .: "body")
+      "message" -> Message <$> (MailboxMessage <$> v .: "side" <*> v .: "phase" <*> v .:? "id" <*> v .: "body")
       "closed" -> pure Closed
       "ack" -> pure Ack
       "pong" -> Pong <$> v .: "pong"
@@ -299,7 +299,10 @@ data MailboxMessage
     , -- | Which phase of the client protocol we are in.
       phase :: Phase
       -- | An identifier for the message. Unused.
-    , messageID :: MessageID
+      --
+      -- According to the protocol docs, this should always be set, but the
+      -- Python server will happily mirror an absent 'id' field as 'null'.
+    , messageID :: Maybe MessageID
     , -- | The body of the message. To be interpreted by the client protocol.
       body :: Body
     } deriving (Eq, Show)

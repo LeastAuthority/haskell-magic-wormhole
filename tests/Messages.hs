@@ -87,7 +87,7 @@ serverMessages = Gen.choice
   ]
 
 mailboxMessages :: MonadGen m => m MailboxMessage
-mailboxMessages = MailboxMessage <$> sides <*> phases <*> messageIDs <*> bodies
+mailboxMessages = MailboxMessage <$> sides <*> phases <*> Gen.maybe messageIDs <*> bodies
 
 welcomeMessages :: MonadGen m => m WelcomeMessage
 welcomeMessages = WelcomeMessage <$> Gen.maybe (Gen.text (Range.linear 0 1024) Gen.unicode) <*> Gen.maybe (Gen.text (Range.linear 0 1024) Gen.unicode)

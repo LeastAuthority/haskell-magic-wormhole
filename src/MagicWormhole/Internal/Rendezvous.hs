@@ -16,6 +16,7 @@ module MagicWormhole.Internal.Rendezvous
   , open
   , close
   , add
+  , readFromMailbox
     -- * Running a Rendezvous client
   , runClient
   ) where
@@ -178,6 +179,10 @@ close conn mailbox' mood' = do
 -- XXX: Should we provide a version that blocks until the message comes back to us?
 add :: HasCallStack => Dispatch.ConnectionState -> Messages.Phase -> Messages.Body -> IO ()
 add conn phase body = atomically $ Dispatch.send conn (Messages.Add phase body)
+
+-- | Read a message from an open mailbox.
+readFromMailbox :: HasCallStack => Dispatch.ConnectionState -> IO Messages.MailboxMessage
+readFromMailbox = atomically . Dispatch.readFromMailbox
 
 -- | Called when an RPC receives a message as a response that does not match
 -- the request.

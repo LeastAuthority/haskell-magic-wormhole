@@ -58,6 +58,8 @@ app command conn = do
     mailbox <- ExceptT $ Rendezvous.claim conn nameplate
     liftIO $ Rendezvous.open conn mailbox  -- XXX: I guess we should run `close` in the case of exceptions?
     liftIO $ Rendezvous.add conn (Messages.Phase "foo") (Messages.Body "hahaha")
+    message <- liftIO $ Rendezvous.readFromMailbox conn
+    print message
     ExceptT $ Rendezvous.close conn (Just mailbox) (Just Messages.Happy)
   case result of
     Left err -> die $ "Failed to " <> show command <> ": " <> show err

@@ -7,6 +7,7 @@ module MagicWormhole.Internal.Dispatch
   , ServerError(..)
   , rpc
   , send
+  , readFromMailbox
   , with
   ) where
 
@@ -41,7 +42,7 @@ data ConnectionState
   { pendingVar :: TVar (HashMap ResponseType (TMVar Messages.ServerMessage))
   , inputChan :: TChan Messages.ServerMessage
   , outputChan :: TChan Messages.ClientMessage
-  , _messageChan :: TChan Messages.MailboxMessage
+  , messageChan :: TChan Messages.MailboxMessage -- XXX: Maybe make a queue
   , motd :: TMVar (Maybe Text)
   } deriving (Eq)
 
@@ -59,6 +60,11 @@ send connState = writeTChan (outputChan connState)
 
 receive :: ConnectionState -> STM Messages.ServerMessage
 receive connState = readTChan (inputChan connState)
+
+-- | Get a message from mailbox. Will block if there's no message, or if we're
+-- in no state to receive messages (e.g. no mailbox open).
+readFromMailbox :: ConnectionState -> STM Messages.MailboxMessage
+readFromMailbox connState = readTChan (messageChan connState)
 
 with :: TChan Messages.ServerMessage -> TChan Messages.ClientMessage -> (ConnectionState -> IO a) -> IO (Either ServerError a)
 with inputChan outputChan action = do
@@ -138,7 +144,9 @@ gotMessage connState msg =
       case expectedResponse original of
         Nothing -> pure (Just (ErrorForNonRequest errorMessage original))
         Just responseType -> gotResponse connState responseType msg
-    Messages.Message{} -> notImplemented  -- TODO: Implement message handling!
+    Messages.Message mailboxMsg -> do
+      writeTChan (messageChan connState) mailboxMsg
+      pure Nothing
     Messages.Nameplates{} -> gotResponse connState NameplatesResponse msg
     Messages.Allocated{} -> gotResponse connState AllocatedResponse msg
     Messages.Claimed{} -> gotResponse connState ClaimedResponse msg
