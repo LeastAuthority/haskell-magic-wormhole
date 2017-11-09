@@ -23,7 +23,8 @@ module MagicWormhole.Internal.Rendezvous
 import Protolude hiding (list, phase)
 
 import Control.Concurrent.STM
-  ( newTChan
+  ( TChan
+  , newTChan
   , readTChan
   , writeTChan
   )
@@ -35,12 +36,20 @@ import qualified MagicWormhole.Internal.Messages as Messages
 import qualified MagicWormhole.Internal.Dispatch as Dispatch
 import MagicWormhole.Internal.WebSockets (WebSocketEndpoint(..))
 
+-- TODO: A big problem throughout this code is that exceptions will get raised
+-- (by websocket code, when threads are killed due to 'race', etc.), and this
+-- means all our error handling gets ignored.
+--
+-- a) properly understand what's going on
+-- b) (probably) either catch things or switch our stuff to exceptions
+-- c) try to figure out some testing strategy
+
 -- | Run a Magic Wormhole Rendezvous client.
 --
 -- Will fail with IO (Left ServerError) if the server declares we are unwelcome.
 runClient :: HasCallStack => WebSocketEndpoint -> Messages.AppID -> Messages.Side -> (Dispatch.ConnectionState -> IO a) -> IO (Either Dispatch.ServerError a)
 runClient (WebSocketEndpoint host port path) appID side' app =
-  Socket.withSocketsDo . WS.runClient host port path $ \ws ->
+  map join $ Socket.withSocketsDo . WS.runClient host port path $ \ws ->
     runClient' ws $ \connState -> do
       -- TODO: Use motd somehow
       -- TODO: bind & receive welcome in parallel
@@ -50,29 +59,36 @@ runClient (WebSocketEndpoint host port path) appID side' app =
 -- XXX: Not sure this split clarifies things. The idea is that this sets up
 -- pumping websocket to channels, but maybe it should just be inlined into
 -- runClient.
-runClient' :: HasCallStack => WS.Connection -> (Dispatch.ConnectionState -> IO a) -> IO a
+runClient' :: HasCallStack => WS.Connection -> (Dispatch.ConnectionState -> IO a) -> IO (Either Dispatch.ServerError a)
 runClient' ws action = do
   inputChan <- atomically newTChan  -- XXX: Maybe do this *before* we connect to the websocket?
   outputChan <- atomically newTChan
-  withAsync (readTo inputChan) $ \_ ->
-    withAsync (writeTo outputChan) $ \_ ->
-      Dispatch.with inputChan outputChan action
-  where
-    readTo chan = do
-      msg' <- eitherDecode <$> WS.receiveData ws
-      case msg' of
-        Left err -> do
-          putStrLn @Text $ "[ERROR] " <> show err
-          pure (Dispatch.ParseError err)  -- XXX: Terminating readTo doesn't terminate the other threads.
-        Right msg -> do
-          putStrLn @Text $ "<<< " <> show msg  -- XXX: Debug
-          atomically $ writeTChan chan msg
-          readTo chan
+  result <- race (race (socketToChan ws inputChan) (chanToSocket ws outputChan))
+                 (Dispatch.with inputChan outputChan action)
+  pure $ case result of
+    Left (Left readErr) -> Left readErr
+    Left (Right writeErr) -> Left writeErr
+    Right result' -> result'
 
-    writeTo chan = forever $ do
-      msg <- atomically $ readTChan chan
-      WS.sendBinaryData ws (encode msg)
-      putStrLn @Text $ ">>> " <> show msg -- XXX: Debug
+socketToChan :: HasCallStack => WS.Connection -> TChan Messages.ServerMessage -> IO Dispatch.ServerError
+socketToChan ws chan = do
+  -- XXX: I think we need to catch `CloseRequest` here and gracefully stop.
+  bytes <- WS.receiveData ws
+  case eitherDecode bytes of
+    Left err -> do
+      putStrLn @Text $ "[ERROR] " <> show err
+      pure (Dispatch.ParseError err)
+    Right msg -> do
+      putStrLn @Text $ "<<< " <> show msg  -- XXX: Debug
+      atomically $ writeTChan chan msg
+      socketToChan ws chan
+
+chanToSocket :: HasCallStack => WS.Connection -> TChan Messages.ClientMessage -> IO b
+chanToSocket ws chan = forever $ do
+  msg <- atomically $ readTChan chan
+  -- XXX: I think this needs to use `sendClose` when the message is Close.
+  WS.sendBinaryData ws (encode msg)
+  putStrLn @Text $ ">>> " <> show msg -- XXX: Debug
 
 -- | Make a request to the rendezvous server.
 rpc :: HasCallStack => Dispatch.ConnectionState -> Messages.ClientMessage -> IO (Either Dispatch.Error Messages.ServerMessage)

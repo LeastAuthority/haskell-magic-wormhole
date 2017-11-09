@@ -60,22 +60,20 @@ send connState = writeTChan (outputChan connState)
 receive :: ConnectionState -> STM Messages.ServerMessage
 receive connState = readTChan (inputChan connState)
 
-with :: TChan Messages.ServerMessage -> TChan Messages.ClientMessage -> (ConnectionState -> IO a) -> IO a
+with :: TChan Messages.ServerMessage -> TChan Messages.ClientMessage -> (ConnectionState -> IO a) -> IO (Either ServerError a)
 with inputChan outputChan action = do
   connState <- atomically $ new inputChan outputChan
-  withAsync (readMessages connState) $
-    \_ -> action connState
+  race (readMessages connState) (action connState)
   where
     -- | Read messages from the input channel forever, or until we fail to handle one.
     readMessages connState = do
+      -- XXX: Maybe one transaction for these?
       msg <- atomically $ receive connState
       result <- atomically $ gotMessage connState msg
       case result of
-        Just err -> pure err  -- XXX: This needs to throw an exception into
-                              -- the action (or something), because
-                              -- terminating readMessages won't terminate the
-                              -- action, and we currently have no way of
-                              -- communicating this error.
+        Just err -> do
+          putStrLn @Text $ "[ERROR] " <> show err
+          pure err
         Nothing -> readMessages connState
 
 rpc :: HasCallStack => ConnectionState -> Messages.ClientMessage -> IO (Either Error Messages.ServerMessage)
