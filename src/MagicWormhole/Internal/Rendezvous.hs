@@ -153,9 +153,11 @@ release session nameplate' = do
 
 -- | Open a mailbox on the server.
 --
--- TODO: Are we sure that we don't have to wait for a response here?
+-- If there's already a mailbox open, the server will send an error message.
+-- In the current implementation, that error will arise in a strange and
+-- unexpected place.
 --
--- TODO: Find out what happens if we call 'open' when we already have a mailbox open.
+-- See https://github.com/warner/magic-wormhole/issues/261#issuecomment-343192449
 open :: HasCallStack => Dispatch.Session -> Messages.Mailbox -> IO ()
 open session mailbox = atomically $ Dispatch.send session (Messages.Open mailbox)
 

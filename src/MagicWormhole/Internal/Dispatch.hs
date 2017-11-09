@@ -177,7 +177,10 @@ gotMessage session msg =
     Messages.Error{Messages.errorMessage, Messages.original} ->
       case expectedResponse original of
         Nothing -> pure (Just (ErrorForNonRequest errorMessage original))
-        Just responseType -> gotResponse session responseType msg
+        Just responseType ->
+          -- TODO: This not quite right, as messages that aren't requests
+          -- (e.g. 'open') can generate errors.
+          gotResponse session responseType msg
     Messages.Message mailboxMsg -> do
       writeTQueue (messageChan session) mailboxMsg
       pure Nothing
