@@ -61,7 +61,6 @@ runClient (WebSocketEndpoint host port path) appID side' app = do
              Right result' -> result'
   where
     action session = do
-      -- TODO: Move bind to 'with' and run it in parallel with accept.
       bind session appID side'
       Right <$> app session
 
