@@ -154,7 +154,10 @@ newtype Phase = Phase Text deriving (Eq, Show, ToJSON, FromJSON)
 
 -- | Identifier for a mailbox.
 --
--- TODO: Explain what a mailbox is and how it's used.
+-- TODO: Document what a mailbox is and how it's used.
+--
+-- This is defined as a "large random string", but in practice is a 13
+-- character, lower-case, alpha-numeric string.
 newtype Mailbox = Mailbox Text deriving (Eq, Show, ToJSON, FromJSON)
 
 -- | The body of a magic wormhole message.

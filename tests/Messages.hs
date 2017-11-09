@@ -66,7 +66,9 @@ genNameplates :: MonadGen m => m Nameplate
 genNameplates = Nameplate <$> Gen.text (Range.linear 0 10) Gen.unicode
 
 mailboxes :: MonadGen m => m Mailbox
-mailboxes = Mailbox <$> Gen.text (Range.linear 0 20) Gen.unicode  -- XXX: Probably wrong.
+mailboxes = Mailbox <$> Gen.text (Range.singleton 13) alphaNum
+  where
+    alphaNum = Gen.element "abcdefghijklmnopqrstuvwxyz09123456789"
 
 moods :: MonadGen m => m Mood
 moods = Gen.element [ Happy, Lonely, Scary, Errory ]

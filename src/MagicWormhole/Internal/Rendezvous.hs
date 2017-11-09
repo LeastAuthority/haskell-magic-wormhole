@@ -50,7 +50,7 @@ import MagicWormhole.Internal.WebSockets (WebSocketEndpoint(..))
 -- Will fail with IO (Left ServerError) if the server declares we are unwelcome.
 runClient :: HasCallStack => WebSocketEndpoint -> Messages.AppID -> Messages.Side -> (Dispatch.Session -> IO a) -> IO (Either Dispatch.ServerError a)
 runClient (WebSocketEndpoint host port path) appID side' app = do
-  inputChan <- atomically newTChan  -- XXX: Maybe do this *before* we connect to the websocket?
+  inputChan <- atomically newTChan
   outputChan <- atomically newTChan
   map join $ Socket.withSocketsDo . WS.runClient host port path $ \ws -> do
     result <- race (race (socketToChan ws inputChan) (chanToSocket ws outputChan))
