@@ -57,7 +57,11 @@ sides :: MonadGen m => m Side
 sides = Side <$> Gen.text (Range.linear 0 10) Gen.hexit
 
 phases :: MonadGen m => m Phase
-phases = Phase <$> Gen.text (Range.linear 0 20) Gen.unicode
+phases = Gen.choice
+  [ pure PakePhase
+  , pure VersionPhase
+  , ApplicationPhase <$> Gen.int (Range.linear 0 maxBound)
+  ]
 
 bodies :: MonadGen m => m Body
 bodies = Body <$> Gen.bytes (Range.linear 0 1024)

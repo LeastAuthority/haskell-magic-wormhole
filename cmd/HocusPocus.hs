@@ -56,7 +56,7 @@ app command session = do
     nameplate <- ExceptT $ Rendezvous.allocate session
     mailbox <- ExceptT $ Rendezvous.claim session nameplate
     liftIO $ Rendezvous.open session mailbox  -- XXX: We should run `close` in the case of exceptions?
-    liftIO $ Rendezvous.add session (Messages.Phase "foo") (Messages.Body "hahaha")
+    liftIO $ Rendezvous.add session Messages.PakePhase (Messages.Body "hahaha")
     message <- liftIO $ Rendezvous.readFromMailbox session
     print message
     ExceptT $ Rendezvous.close session (Just mailbox) (Just Messages.Happy)

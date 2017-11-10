@@ -150,7 +150,30 @@ newtype Nameplate = Nameplate Text deriving (Eq, Show, ToJSON, FromJSON)
 -- | TODO: Document phase once we understand what it is. It's a bit awkward,
 -- because it appears to be an aspect of the client protocol, which I'd rather
 -- the server protocol implementation not have to know about.
-newtype Phase = Phase Text deriving (Eq, Show, ToJSON, FromJSON)
+data Phase
+  = -- | Sent immediately on opening the mailbox.
+    PakePhase
+  | -- | Used to negotiate capabilities.
+    VersionPhase
+    -- | Reserved for application data. Messages with these phases will be
+    -- delivered in numeric order.
+  | ApplicationPhase Int
+  deriving (Eq, Show)
+
+instance ToJSON Phase where
+  toJSON PakePhase = "pake"
+  toJSON VersionPhase = "version"
+  toJSON (ApplicationPhase n) = toJSON (show n :: Text)
+
+instance FromJSON Phase where
+  parseJSON (String "pake") = pure PakePhase
+  parseJSON (String "version") = pure VersionPhase
+  parseJSON (String number) =
+    let number' = toS number in
+    case readMaybe number' of
+      Just n -> pure (ApplicationPhase n)
+      Nothing -> fail $ "Unrecognized phase: " <> number'
+  parseJSON other = typeMismatch "Phase" other
 
 -- | Identifier for a mailbox.
 --
