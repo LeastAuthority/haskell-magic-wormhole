@@ -35,7 +35,6 @@ library
     , unordered-containers
     , websockets
   exposed-modules:
-      MagicWormhole.Internal.Dispatch
       MagicWormhole.Internal.Messages
       MagicWormhole.Internal.Rendezvous
       MagicWormhole.Internal.WebSockets
