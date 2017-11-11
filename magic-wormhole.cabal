@@ -27,10 +27,16 @@ library
       base
     , protolude
     , aeson
+    , hashable
+    , memory
     , network
     , network-uri
+    , stm
+    , unordered-containers
     , websockets
   exposed-modules:
+      MagicWormhole.Internal.Dispatch
+      MagicWormhole.Internal.Messages
       MagicWormhole.Internal.Rendezvous
       MagicWormhole.Internal.WebSockets
   default-language: Haskell2010
@@ -65,6 +71,6 @@ test-suite tasty
     , tasty-hedgehog
     , tasty-hspec
   other-modules:
-      Rendezvous
+      Messages
       WebSockets
   default-language: Haskell2010

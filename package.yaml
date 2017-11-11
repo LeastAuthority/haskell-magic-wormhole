@@ -22,8 +22,12 @@ library:
   source-dirs: src
   dependencies:
     - aeson
+    - hashable
+    - memory
     - network
     - network-uri
+    - stm
+    - unordered-containers
     - websockets
 
 executables:

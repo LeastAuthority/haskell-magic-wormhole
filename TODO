@@ -6,7 +6,10 @@
 :LOGBOOK:
 - State "DONE"       from "TODO"       [2017-10-24 Tue 11:39]
 :END:
-* TODO handle "welcome" message from server
+* DONE handle "welcome" message from server
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2017-11-09 Thu 13:50]
+:END:
 * TODO Set up logging (monad-logger)
 * DONE move code to library
 :LOGBOOK:

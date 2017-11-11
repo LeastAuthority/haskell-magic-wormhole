@@ -8,6 +8,8 @@ import Protolude
 
 import qualified Options.Applicative as Opt
 
+import qualified MagicWormhole.Internal.Dispatch as Dispatch
+import qualified MagicWormhole.Internal.Messages as Messages
 import qualified MagicWormhole.Internal.Rendezvous as Rendezvous
 import MagicWormhole.Internal.WebSockets (WebSocketEndpoint(..), parseWebSocketEndpoint)
 
@@ -48,18 +50,28 @@ makeOptions :: Text -> Opt.Parser a -> Opt.ParserInfo a
 makeOptions headerText parser = Opt.info (Opt.helper <*> parser) (Opt.fullDesc <> Opt.header (toS headerText))
 
 -- | Execute 'Command' against a Wormhole Rendezvous server.
-app :: Command -> Rendezvous.Connection -> IO ()
-app command conn = do
-  print command
-  -- XXX: Just block waiting for the server to tell us stuff. To be a proper
-  -- client, we want to get stuff from the server and send stuff more or less
-  -- simultaneously.
-  Right welcome <- Rendezvous.receive conn
-  print welcome
-  pong <- Rendezvous.rpc conn (Rendezvous.Ping 5)
-  print pong
+app :: Command -> Dispatch.Session -> IO ()
+app command session = do
+  result <- runExceptT $ do
+    print command
+    nameplate <- ExceptT $ Rendezvous.allocate session
+    mailbox <- ExceptT $ Rendezvous.claim session nameplate
+    liftIO $ Rendezvous.open session mailbox  -- XXX: We should run `close` in the case of exceptions?
+    liftIO $ Rendezvous.add session (Messages.Phase "foo") (Messages.Body "hahaha")
+    message <- liftIO $ Rendezvous.readFromMailbox session
+    print message
+    ExceptT $ Rendezvous.close session (Just mailbox) (Just Messages.Happy)
+  case result of
+    Left err -> die $ "Failed to " <> show command <> ": " <> show err
+    Right _ -> pass
 
 main :: IO ()
 main = do
   options <- Opt.execParser (makeOptions "hocus-pocus - summon and traverse magic wormholes" optionsParser)
-  Rendezvous.runClient (rendezvousEndpoint options) (app (cmd options))
+  result <- Rendezvous.runClient (rendezvousEndpoint options) appID side (app (cmd options))
+  case result of
+    Left err -> die $ "Server rejected connection: " <> show err
+    Right _ -> pass
+  where
+    appID = Messages.AppID "jml.io/hocus-pocus"
+    side = Messages.Side "treebeard"

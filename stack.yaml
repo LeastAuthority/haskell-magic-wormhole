@@ -1,7 +1,8 @@
-resolver: lts-9.9
+resolver: lts-9.11
 
 packages:
   - .
 
 extra-deps:
+  - protolude-0.2
   - tasty-hedgehog-0.1.0.1
