@@ -110,15 +110,26 @@ receive session = do
       putStrLn @Text $ "<<< " <> show result  -- XXX: Debug
       pure $ Right result
 
--- | Run an action inside a Magic Wormhole session. Use this to interact with a Magic Wormhole server.
-with :: WS.Connection
-     -> (Session -> IO a) -- ^ Action to perform while we are in a Magic Wormhole session. See 'send', 'rpc', and 'readFromMailbox'.
-     -> IO (Either ServerError a) -- ^ Either the result of the action or a 'ServerError' if we encountered problems.
-with ws action = do
-  session <- atomically $ new ws
-  race (readMessages session) (action session)
+-- | Run a Magic Wormhole Rendezvous client. Use this to interact with a Magic Wormhole server.
+--
+-- Will fail with IO (Left ServerError) if the server declares we are unwelcome.
+runClient
+  :: HasCallStack
+  => WebSocketEndpoint -- ^ The websocket to connect to
+  -> Messages.AppID -- ^ ID for your application (e.g. example.com/your-application)
+  -> Messages.Side -- ^ Identifier for your side
+  -> (Session -> IO a) -- ^ Action to perform inside the Magic Wormhole session
+  -> IO (Either ServerError a) -- ^ The result of the action or a ServerError
+runClient (WebSocketEndpoint host port path) appID side' app =
+  map join $ Socket.withSocketsDo . WS.runClient host port path $ \ws -> do
+    session <- atomically $ new ws
+    race (readMessages session) (action session)
   where
-    -- | Read messages from the input channel forever, or until we fail to handle one.
+    action session = do
+      bind session appID side'
+      Right <$> app session
+
+    -- | Read messages from the websocket forever, or until we fail to handle one.
     readMessages session = do
       -- We read the message from the channel and handle it (either by setting
       -- the RPC response or forwarding to the mailbox message queue) all in
@@ -134,18 +145,6 @@ with ws action = do
           putStrLn @Text $ "[ERROR] " <> show err
           pure err
         Nothing -> readMessages session
-
-
--- | Run a Magic Wormhole Rendezvous client.
---
--- Will fail with IO (Left ServerError) if the server declares we are unwelcome.
-runClient :: HasCallStack => WebSocketEndpoint -> Messages.AppID -> Messages.Side -> (Session -> IO a) -> IO (Either ServerError a)
-runClient (WebSocketEndpoint host port path) appID side' app =
-  map join $ Socket.withSocketsDo . WS.runClient host port path $ \ws -> with ws action
-  where
-    action session = do
-      bind session appID side'
-      Right <$> app session
 
 -- | Make a request to the rendezvous server.
 rpc :: HasCallStack
