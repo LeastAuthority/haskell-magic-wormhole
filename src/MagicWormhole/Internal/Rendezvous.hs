@@ -22,6 +22,8 @@ module MagicWormhole.Internal.Rendezvous
     -- * Running a Rendezvous client
   , runClient
   , Session
+  , sessionAppID
+  , sessionSide
   ) where
 
 import Protolude hiding (list, phase)
@@ -70,21 +72,24 @@ import MagicWormhole.Internal.WebSockets (WebSocketEndpoint(..))
 -- - 'readFromMailbox' reads messages from the mailbox
 data Session
   = Session
-  { pendingVar :: TVar (HashMap ResponseType (TMVar Messages.ServerMessage))
+  { connection :: WS.Connection
+  , sessionAppID :: Messages.AppID -- ^ The 'AppID' of this running session
+  , sessionSide :: Messages.Side -- ^ The 'Side' of this running session
+  , pendingVar :: TVar (HashMap ResponseType (TMVar Messages.ServerMessage))
   , messageChan :: TQueue Messages.MailboxMessage
   , motd :: TMVar (Maybe Text)
-  , connection :: WS.Connection
   }
 
 -- | Create a new 'Session'.
 new :: WS.Connection -- ^ Active WebSocket connection to a Rendezvous Server.
+    -> Messages.AppID
+    -> Messages.Side
     -> STM Session  -- ^ Opaque 'Session' object.
-new connection
-  = Session
+new connection appID side
+  = Session connection appID side
   <$> newTVar mempty
   <*> newTQueue
   <*> newEmptyTMVar
-  <*> pure connection
 
 -- | Send a message to a Magic Wormhole Rendezvous server.
 send :: Session -- ^ An active session. Get this using 'runClient'.
@@ -120,13 +125,13 @@ runClient
   -> Messages.Side -- ^ Identifier for your side
   -> (Session -> IO a) -- ^ Action to perform inside the Magic Wormhole session
   -> IO (Either ServerError a) -- ^ The result of the action or a ServerError
-runClient (WebSocketEndpoint host port path) appID side' app =
+runClient (WebSocketEndpoint host port path) appID side app =
   map join $ Socket.withSocketsDo . WS.runClient host port path $ \ws -> do
-    session <- atomically $ new ws
+    session <- atomically $ new ws appID side
     race (readMessages session) (action session)
   where
     action session = do
-      bind session appID side'
+      bind session appID side
       Right <$> app session
 
     -- | Read messages from the websocket forever, or until we fail to handle one.
