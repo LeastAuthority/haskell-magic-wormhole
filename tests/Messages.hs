@@ -1,4 +1,7 @@
-module Messages (tests) where
+module Messages
+  ( tests
+  , appIDs
+  ) where
 
 import Protolude
 
@@ -25,7 +28,7 @@ import MagicWormhole.Internal.Messages
   )
 
 tests :: IO TestTree
-tests = pure $ testGroup "Rendezvous"
+tests = pure $ testGroup "Messages"
   [ testProperty "client messages roundtrip" $ property $ do
       x <- forAll clientMessages
       tripping x encode eitherDecode

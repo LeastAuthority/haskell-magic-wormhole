@@ -22,6 +22,7 @@ module MagicWormhole.Internal.Rendezvous
     -- * Running a Rendezvous client
   , runClient
   , Session
+  , Error
   , sessionAppID
   , sessionSide
   ) where
@@ -266,7 +267,7 @@ add session phase body = send session (Messages.Add phase body)
 -- Specifically, a message with a different 'side' to us.
 --
 -- Will discard all messages that are from us.
-readFromMailbox :: HasCallStack => Session -> IO Messages.MailboxMessage
+readFromMailbox :: HasCallStack => Session -> STM Messages.MailboxMessage
 readFromMailbox session = do
   msg <- readFromMailbox' session
   if Messages.side msg == sessionSide session
@@ -277,8 +278,8 @@ readFromMailbox session = do
 --
 -- Will block if there's no message, or if we're in no state to receive
 -- messages (e.g. no mailbox open).
-readFromMailbox' :: HasCallStack => Session -> IO Messages.MailboxMessage
-readFromMailbox' session = atomically $ readTQueue (messageChan session)
+readFromMailbox' :: HasCallStack => Session -> STM Messages.MailboxMessage
+readFromMailbox' session = readTQueue (messageChan session)
 
 -- | Called when an RPC receives a message as a response that does not match
 -- the request.

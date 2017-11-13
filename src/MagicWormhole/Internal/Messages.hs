@@ -315,7 +315,8 @@ instance FromJSON MessageID where
       _ -> fail $ "Could not parse MessageID: " <> toS s
   parseJSON unknown = typeMismatch "MessageID" unknown
 
-
+-- XXX: It's possible we want another type that represents an *unsent*
+-- message, which will not have a side and will not have message ID.
 -- | A message sent to a mailbox.
 data MailboxMessage
   = MailboxMessage
