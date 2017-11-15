@@ -2,9 +2,8 @@ resolver: lts-9.11
 
 packages:
   - .
-  - ../haskell-spake2
 
 extra-deps:
   - protolude-0.2
   - tasty-hedgehog-0.1.0.1
-  - spake2-0.2.0
+  - spake2-0.3.0
