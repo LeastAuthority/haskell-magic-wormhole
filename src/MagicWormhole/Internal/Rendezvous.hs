@@ -37,10 +37,6 @@ import Control.Concurrent.STM
   , putTMVar
   , takeTMVar
   , tryPutTMVar
-  , TChan
-  , newTChan
-  , readTChan
-  , writeTChan
   , TQueue
   , newTQueue
   , readTQueue
@@ -65,48 +61,94 @@ import MagicWormhole.Internal.WebSockets (WebSocketEndpoint(..))
 -- b) (probably) either catch things or switch our stuff to exceptions
 -- c) try to figure out some testing strategy
 
--- | Run a Magic Wormhole Rendezvous client.
+
+-- | Abstract type representing a Magic Wormhole session.
+--
+-- - 'runClient' gets a session
+-- - 'rpc' sends RPCs from inside 'runClient'
+-- - 'send' sends non-RPC messages (e.g. `bind`)
+-- - 'readFromMailbox' reads messages from the mailbox
+data Session
+  = Session
+  { pendingVar :: TVar (HashMap ResponseType (TMVar Messages.ServerMessage))
+  , messageChan :: TQueue Messages.MailboxMessage
+  , motd :: TMVar (Maybe Text)
+  , connection :: WS.Connection
+  }
+
+-- | Create a new 'Session'.
+new :: WS.Connection -- ^ Active WebSocket connection to a Rendezvous Server.
+    -> STM Session  -- ^ Opaque 'Session' object.
+new connection
+  = Session
+  <$> newTVar mempty
+  <*> newTQueue
+  <*> newEmptyTMVar
+  <*> pure connection
+
+-- | Send a message to a Magic Wormhole Rendezvous server.
+send :: Session -- ^ An active session. Get this using 'runClient'.
+     -> Messages.ClientMessage -- ^ Message to send to the server.
+     -> IO ()
+-- XXX: I think this needs to use `sendClose` when the message is Close.
+send session msg = do
+  WS.sendBinaryData (connection session) (encode msg)
+  putStrLn @Text $ ">>> " <> show msg -- XXX: Debug
+
+-- | Receive a message from a Magic Wormhole Rendezvous server.
+-- Blocks until such a message exists.
+receive :: Session -- ^ An active session. Get this using 'runClient'.
+        -> IO (Either ServerError Messages.ServerMessage) -- ^ Next message from the server.
+receive session = do
+  -- XXX: I think we need to catch `CloseRequest` here and gracefully stop.
+  msg <- WS.receiveData (connection session)
+  case eitherDecode msg of
+    Left err -> do
+      putStrLn @Text $ "[ERROR] " <> show err
+      pure $ Left (ParseError err)
+    Right result -> do
+      putStrLn @Text $ "<<< " <> show result  -- XXX: Debug
+      pure $ Right result
+
+-- | Run a Magic Wormhole Rendezvous client. Use this to interact with a Magic Wormhole server.
 --
 -- Will fail with IO (Left ServerError) if the server declares we are unwelcome.
-runClient :: HasCallStack => WebSocketEndpoint -> Messages.AppID -> Messages.Side -> (Session -> IO a) -> IO (Either ServerError a)
-runClient (WebSocketEndpoint host port path) appID side' app = do
-  inputChan <- atomically newTChan
-  outputChan <- atomically newTChan
+runClient
+  :: HasCallStack
+  => WebSocketEndpoint -- ^ The websocket to connect to
+  -> Messages.AppID -- ^ ID for your application (e.g. example.com/your-application)
+  -> Messages.Side -- ^ Identifier for your side
+  -> (Session -> IO a) -- ^ Action to perform inside the Magic Wormhole session
+  -> IO (Either ServerError a) -- ^ The result of the action or a ServerError
+runClient (WebSocketEndpoint host port path) appID side' app =
   map join $ Socket.withSocketsDo . WS.runClient host port path $ \ws -> do
-    result <- race (race (socketToChan ws inputChan) (chanToSocket ws outputChan))
-                   (with inputChan outputChan action)
-    pure $ case result of
-             Left (Left readErr) -> Left readErr
-             Left (Right writeErr) -> Left writeErr
-             Right result' -> result'
+    session <- atomically $ new ws
+    race (readMessages session) (action session)
   where
     action session = do
       bind session appID side'
       Right <$> app session
 
-    socketToChan :: HasCallStack => WS.Connection -> TChan Messages.ServerMessage -> IO ServerError
-    socketToChan ws chan = do
-      -- XXX: I think we need to catch `CloseRequest` here and gracefully stop.
-      bytes <- WS.receiveData ws
-      case eitherDecode bytes of
-        Left err -> do
+    -- | Read messages from the websocket forever, or until we fail to handle one.
+    readMessages session = do
+      -- We read the message from the channel and handle it (either by setting
+      -- the RPC response or forwarding to the mailbox message queue) all in
+      -- one transaction. This means that if an exception occurs, the message
+      -- will remain in the channel.
+      result <- do
+        msg' <- receive session
+        case msg' of
+          Left parseError -> pure $ Just parseError
+          Right msg -> atomically $ gotMessage session msg
+      case result of
+        Just err -> do
           putStrLn @Text $ "[ERROR] " <> show err
-          pure (ParseError err)
-        Right msg -> do
-          putStrLn @Text $ "<<< " <> show msg  -- XXX: Debug
-          atomically $ writeTChan chan msg
-          socketToChan ws chan
-
-    chanToSocket :: HasCallStack => WS.Connection -> TChan Messages.ClientMessage -> IO b
-    chanToSocket ws chan = forever $ do
-      msg <- atomically $ readTChan chan
-      -- XXX: I think this needs to use `sendClose` when the message is Close.
-      WS.sendBinaryData ws (encode msg)
-      putStrLn @Text $ ">>> " <> show msg -- XXX: Debug
+          pure err
+        Nothing -> readMessages session
 
 -- | Make a request to the rendezvous server.
 rpc :: HasCallStack
-    => Session -- ^ A Magic Wormhole session. Get one using 'with'.
+    => Session -- ^ A Magic Wormhole session. Get one using 'runClient'.
     -> Messages.ClientMessage -- ^ The RPC to send. Will fail with an 'Error' if this is not a valid RPC.
     -> IO (Either Error Messages.ServerMessage) -- ^ Either the result of an RPC, or some sort of error happened.
 rpc session req =
@@ -120,7 +162,7 @@ rpc session req =
       case box' of
         Left clientError -> pure (Left (ClientError clientError))
         Right box -> do
-          atomically $ send session req
+          send session req
           response <- atomically $ waitForResponse session responseType box
           pure $ case response of
                    Messages.Error reason original -> Left (ClientError (BadRequest reason original))
@@ -133,7 +175,7 @@ rpc session req =
 --
 -- See https://github.com/warner/magic-wormhole/issues/261
 bind :: HasCallStack => Session -> Messages.AppID -> Messages.Side -> IO ()
-bind session appID side' = atomically $ send session (Messages.Bind appID side')
+bind session appID side' = send session (Messages.Bind appID side')
 
 -- | Ping the server.
 --
@@ -196,7 +238,7 @@ release session nameplate' = do
 --
 -- See https://github.com/warner/magic-wormhole/issues/261#issuecomment-343192449
 open :: HasCallStack => Session -> Messages.Mailbox -> IO ()
-open session mailbox = atomically $ send session (Messages.Open mailbox)
+open session mailbox = send session (Messages.Open mailbox)
 
 -- | Close a mailbox on the server.
 close :: HasCallStack => Session -> Maybe Messages.Mailbox -> Maybe Messages.Mood -> IO (Either Error ())
@@ -211,7 +253,7 @@ close session mailbox' mood' = do
 --
 -- XXX: Should we provide a version that blocks until the message comes back to us?
 add :: HasCallStack => Session -> Messages.Phase -> Messages.Body -> IO ()
-add session phase body = atomically $ send session (Messages.Add phase body)
+add session phase body = send session (Messages.Add phase body)
 
 -- | Read a message from an open mailbox.
 --
@@ -230,72 +272,6 @@ readFromMailbox session = atomically $ readTQueue (messageChan session)
 -- TODO: Try to make this unnecessary.
 unexpectedMessage :: HasCallStack => Messages.ClientMessage -> Messages.ServerMessage -> a
 unexpectedMessage request response = panic $ "Unexpected message: " <> show response <> ", in response to: " <> show request
-
--- | Abstract type representing a Magic Wormhole session.
---
--- - 'with' gets a session
--- - 'rpc' sends RPCs from inside 'with'
--- - 'send' sends non-RPC messages (e.g. `bind`)
--- - 'readFromMailbox' reads messages from the mailbox
-data Session
-  = Session
-  { pendingVar :: TVar (HashMap ResponseType (TMVar Messages.ServerMessage))
-  , inputChan :: TChan Messages.ServerMessage
-  , outputChan :: TChan Messages.ClientMessage
-  , messageChan :: TQueue Messages.MailboxMessage
-  , motd :: TMVar (Maybe Text)
-  } deriving (Eq)
-
--- | Create a new 'Session'.
---
--- Requires an input channel and an output channel. Assumes those channels are
--- connected to a Magic Wormhole Rendezvous server.
-new :: TChan Messages.ServerMessage -- ^ Input channel that gets messages from the server
-    -> TChan Messages.ClientMessage -- ^ Output channel that sends messages to the server
-    -> STM Session  -- ^ Opaque 'Session' object.
-new inputChan outputChan
-  = Session
-  <$> newTVar mempty
-  <*> pure inputChan
-  <*> pure outputChan
-  <*> newTQueue
-  <*> newEmptyTMVar
-
--- | Send a message to a Magic Wormhole Rendezvous server.
-send :: Session -- ^ An active session. Get this using 'with'.
-     -> Messages.ClientMessage -- ^ Message to send to the server.
-     -> STM ()
-send session = writeTChan (outputChan session)
-
--- | Receive a message from a Magic Wormhole Rendezvous server.
--- Blocks until such a message exists.
-receive :: Session -- ^ An active session. Get this using 'with'.
-        -> STM Messages.ServerMessage -- ^ Next message from the server.
-receive session = readTChan (inputChan session)
-
--- | Run an action inside a Magic Wormhole session. Use this to interact with a Magic Wormhole server.
-with :: TChan Messages.ServerMessage -- ^ Channel that receives messages from the server. The session will read from this.
-     -> TChan Messages.ClientMessage -- ^ Channel that sends messages to the server. The session will write to this.
-     -> (Session -> IO a) -- ^ Action to perform while we are in a Magic Wormhole session. See 'send', 'rpc', and 'readFromMailbox'.
-     -> IO (Either ServerError a) -- ^ Either the result of the action or a 'ServerError' if we encountered problems.
-with inputChan outputChan action = do
-  session <- atomically $ new inputChan outputChan
-  race (readMessages session) (action session)
-  where
-    -- | Read messages from the input channel forever, or until we fail to handle one.
-    readMessages session = do
-      -- We read the message from the channel and handle it (either by setting
-      -- the RPC response or forwarding to the mailbox message queue) all in
-      -- one transaction. This means that if an exception occurs, the message
-      -- will remain in the channel.
-      result <- atomically $ do
-        msg <- receive session
-        gotMessage session msg
-      case result of
-        Just err -> do
-          putStrLn @Text $ "[ERROR] " <> show err
-          pure err
-        Nothing -> readMessages session
 
 -- | Tell the connection that we expect a response of the given type.
 --
