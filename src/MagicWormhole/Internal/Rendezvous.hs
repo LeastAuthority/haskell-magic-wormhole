@@ -64,8 +64,8 @@ import MagicWormhole.Internal.WebSockets (WebSocketEndpoint(..))
 
 -- | Abstract type representing a Magic Wormhole session.
 --
--- - 'with' gets a session
--- - 'rpc' sends RPCs from inside 'with'
+-- - 'runClient' gets a session
+-- - 'rpc' sends RPCs from inside 'runClient'
 -- - 'send' sends non-RPC messages (e.g. `bind`)
 -- - 'readFromMailbox' reads messages from the mailbox
 data Session
@@ -87,7 +87,7 @@ new connection
   <*> pure connection
 
 -- | Send a message to a Magic Wormhole Rendezvous server.
-send :: Session -- ^ An active session. Get this using 'with'.
+send :: Session -- ^ An active session. Get this using 'runClient'.
      -> Messages.ClientMessage -- ^ Message to send to the server.
      -> IO ()
 -- XXX: I think this needs to use `sendClose` when the message is Close.
@@ -97,7 +97,7 @@ send session msg = do
 
 -- | Receive a message from a Magic Wormhole Rendezvous server.
 -- Blocks until such a message exists.
-receive :: Session -- ^ An active session. Get this using 'with'.
+receive :: Session -- ^ An active session. Get this using 'runClient'.
         -> IO (Either ServerError Messages.ServerMessage) -- ^ Next message from the server.
 receive session = do
   -- XXX: I think we need to catch `CloseRequest` here and gracefully stop.
@@ -148,7 +148,7 @@ runClient (WebSocketEndpoint host port path) appID side' app =
 
 -- | Make a request to the rendezvous server.
 rpc :: HasCallStack
-    => Session -- ^ A Magic Wormhole session. Get one using 'with'.
+    => Session -- ^ A Magic Wormhole session. Get one using 'runClient'.
     -> Messages.ClientMessage -- ^ The RPC to send. Will fail with an 'Error' if this is not a valid RPC.
     -> IO (Either Error Messages.ServerMessage) -- ^ Either the result of an RPC, or some sort of error happened.
 rpc session req =
