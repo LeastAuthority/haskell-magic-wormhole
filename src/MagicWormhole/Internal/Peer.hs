@@ -75,13 +75,15 @@ wormholeSpakeProtocol (Messages.AppID appID) =
 -- encodes as `ascii` rather than the expected `UTF-8`, so I need to be a bit
 -- more careful.
 
--- data Peer
---   = Peer
---   { _peerSession :: Rendezvous.Session
---   }
+-- | SPAKE2 key used for the duration of a Magic Wormhole peer-to-peer connection.
+--
+-- Individual messages will be encrypted using 'encrypt' ('decrypt'), which
+-- must be given a key that's /generated/ from this one (see 'deriveKey' and
+-- 'derivePhaseKey').
+newtype SessionKey = SessionKey ByteString
 
 -- | Exchange SPAKE2 keys with a Magic Wormhole peer.
-pakeExchange :: Rendezvous.Session -> Spake2.Password -> IO (Either Error ByteString)
+pakeExchange :: Rendezvous.Session -> Spake2.Password -> IO (Either Error SessionKey)
 pakeExchange session password = do
   let protocol = wormholeSpakeProtocol (Rendezvous.sessionAppID session)
   exchange <- Spake2.startSpake2 protocol password
@@ -92,7 +94,8 @@ pakeExchange session password = do
     Right inbound' ->
       let
         keyMaterial = Spake2.generateKeyMaterial exchange inbound'
-      in pure (Right (Spake2.createSessionKey protocol inbound' outbound keyMaterial password))
+        sessionKey = Spake2.createSessionKey protocol inbound' outbound keyMaterial password
+      in pure . Right . SessionKey $ sessionKey
   where
     sendPakeMessage protocol outbound =
       let body = encodeElement protocol outbound
@@ -105,18 +108,18 @@ pakeExchange session password = do
       unless (Messages.phase msg == Messages.PakePhase) retry
       pure (decodeElement protocol (Messages.body msg))
 
-
 {- Straight up translation of some Python code -}
 
-deriveKey :: (ByteArray.ByteArrayAccess ikm, ByteArray.ByteArrayAccess info) => ikm -> info -> SecretBox.Key
-deriveKey key purpose =
+-- | Derive a one-off key from the SPAKE2 'SessionKey'. Use this key only once.
+deriveKey :: (ByteArray.ByteArrayAccess info) => SessionKey -> info -> SecretBox.Key
+deriveKey (SessionKey key) purpose =
   fromMaybe (panic "Could not encode to SecretBox key") $ -- Impossible. We guarntee it's the right size.
     Saltine.decode (HKDF.expand (HKDF.extract salt key :: HKDF.PRK SHA256) purpose keySize)
   where
     salt = "" :: ByteString
     keySize = ByteSizes.secretBoxKey
 
-derivePhaseKey :: ByteArray.ByteArrayAccess ikm => ikm -> Messages.Side -> Messages.Phase -> SecretBox.Key
+derivePhaseKey :: SessionKey -> Messages.Side -> Messages.Phase -> SecretBox.Key
 derivePhaseKey key (Messages.Side side) phase =
   deriveKey key purpose
   where
@@ -126,12 +129,16 @@ derivePhaseKey key (Messages.Side side) phase =
     hashDigest thing = ByteArray.convert (hashWith SHA256 thing)
 
 -- XXX: Different types for ciphertext and plaintext please!
+-- | Encrypt a message using 'SecretBox'. Get the key from 'deriveKey'.
+-- Decrypt with 'decrypt'.
 encrypt :: SecretBox.Key -> ByteString -> IO ByteString
 encrypt key message = do
   nonce <- SecretBox.newNonce
   let ciphertext = SecretBox.secretbox key nonce message
   pure $ Saltine.encode nonce <> ciphertext
 
+-- | Decrypt a message using 'SecretBox'. Get the key from 'deriveKey'.
+-- Encrypted using 'encrypt'.
 decrypt :: SecretBox.Key -> ByteString -> Maybe ByteString
 decrypt key ciphertext = do
   let (nonce', ciphertext') = ByteString.splitAt ByteSizes.secretBoxNonce ciphertext
