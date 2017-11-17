@@ -108,10 +108,13 @@ pakeExchange session password = do
       unless (Messages.phase msg == Messages.PakePhase) retry
       pure (decodeElement protocol (Messages.body msg))
 
-{- Straight up translation of some Python code -}
+-- | The purpose of a message. 'deriveKey' combines this with the 'SessionKey'
+-- to make a unique 'SecretBox.Key'. Do not re-use a 'Purpose' to send more
+-- than message.
+type Purpose = ByteString
 
 -- | Derive a one-off key from the SPAKE2 'SessionKey'. Use this key only once.
-deriveKey :: (ByteArray.ByteArrayAccess info) => SessionKey -> info -> SecretBox.Key
+deriveKey :: SessionKey -> Purpose -> SecretBox.Key
 deriveKey (SessionKey key) purpose =
   fromMaybe (panic "Could not encode to SecretBox key") $ -- Impossible. We guarntee it's the right size.
     Saltine.decode (HKDF.expand (HKDF.extract salt key :: HKDF.PRK SHA256) purpose keySize)
@@ -119,14 +122,17 @@ deriveKey (SessionKey key) purpose =
     salt = "" :: ByteString
     keySize = ByteSizes.secretBoxKey
 
-derivePhaseKey :: SessionKey -> Messages.Side -> Messages.Phase -> SecretBox.Key
-derivePhaseKey key (Messages.Side side) phase =
-  deriveKey key purpose
+-- | Obtain a 'Purpose' for deriving a key to send a message that's part of a
+-- peer-to-peer communication.
+phasePurpose :: Messages.Side -> Messages.Phase -> Purpose
+phasePurpose (Messages.Side side) phase = "wormhole:phase:" <> sideHashDigest <> phaseHashDigest
   where
-    purpose = "wormhole:phase:" <> sideHashDigest <> phaseHashDigest :: ByteString
     sideHashDigest = hashDigest (toS @Text @ByteString side)
     phaseHashDigest = hashDigest (toS @LByteString @ByteString (Aeson.encode phase))
     hashDigest thing = ByteArray.convert (hashWith SHA256 thing)
+
+derivePhaseKey :: SessionKey -> Messages.Side -> Messages.Phase -> SecretBox.Key
+derivePhaseKey key side phase = deriveKey key (phasePurpose side phase)
 
 -- XXX: Different types for ciphertext and plaintext please!
 -- | Encrypt a message using 'SecretBox'. Get the key from 'deriveKey'.
