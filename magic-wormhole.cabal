@@ -78,6 +78,7 @@ test-suite tasty
     , tasty-hedgehog
     , tasty-hspec
   other-modules:
+      Generator
       Messages
       Peer
       WebSockets
