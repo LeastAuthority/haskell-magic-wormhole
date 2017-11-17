@@ -160,6 +160,8 @@ data Phase
   | ApplicationPhase Int
   deriving (Eq, Show)
 
+-- TODO: Add test to ensure this can be cleanly encoded & decoded to ASCII.
+
 instance ToJSON Phase where
   toJSON PakePhase = "pake"
   toJSON VersionPhase = "version"
@@ -271,6 +273,9 @@ newtype AppID = AppID Text deriving (Eq, Show, FromJSON, ToJSON)
 
 -- | Short string used to differentiate between echoes of our own messages and
 -- real messages from other clients.
+--
+-- TODO: This needs to be cleanly encoded to ASCII, so update the type or
+-- provide a smart constructor.
 newtype Side = Side Text deriving (Eq, Show, FromJSON, ToJSON)
 
 -- | How the client feels. Reported by the client to the server at the end of

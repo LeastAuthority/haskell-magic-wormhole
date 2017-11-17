@@ -1,6 +1,8 @@
 module Messages
   ( tests
   , appIDs
+  , phases
+  , sides
   ) where
 
 import Protolude

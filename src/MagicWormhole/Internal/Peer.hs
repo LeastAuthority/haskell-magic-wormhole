@@ -8,19 +8,28 @@ module MagicWormhole.Internal.Peer
   , wormholeSpakeProtocol
   , decodeElement
   , encodeElement
+  , decrypt
+  , encrypt
+  , derivePhaseKey
   ) where
 
 import Protolude hiding (phase)
 
 import Control.Monad (fail)
-import Crypto.Hash (SHA256(..))
+import Crypto.Hash (SHA256(..), hashWith)
+import qualified Crypto.KDF.HKDF as HKDF
+import qualified Crypto.Saltine.Internal.ByteSizes as ByteSizes
+import qualified Crypto.Saltine.Class as Saltine
+import qualified Crypto.Saltine.Core.SecretBox as SecretBox
 import qualified Crypto.Spake2 as Spake2
 import Crypto.Spake2.Group (Group(Element, arbitraryElement))
 import Crypto.Spake2.Groups (Ed25519(..))
 import Data.Aeson (FromJSON, ToJSON, (.=), object, Value(..), (.:))
 import Data.Aeson.Types (typeMismatch)
 import qualified Data.Aeson as Aeson
+import qualified Data.ByteArray as ByteArray
 import Data.ByteArray.Encoding (convertToBase, convertFromBase, Base(Base16))
+import qualified Data.ByteString as ByteString
 import Data.String (String)
 
 import qualified MagicWormhole.Internal.Messages as Messages
@@ -61,6 +70,11 @@ wormholeSpakeProtocol (Messages.AppID appID) =
     sideID = Spake2.SideID (toS appID)
 
 
+-- TODO: I've been playing fast and loose with Text -> ByteString conversions
+-- (grep for `toS`) for the details. The Python implementation occasionally
+-- encodes as `ascii` rather than the expected `UTF-8`, so I need to be a bit
+-- more careful.
+
 -- data Peer
 --   = Peer
 --   { _peerSession :: Rendezvous.Session
@@ -90,6 +104,39 @@ pakeExchange session password = do
       msg <- Rendezvous.readFromMailbox session
       unless (Messages.phase msg == Messages.PakePhase) retry
       pure (decodeElement protocol (Messages.body msg))
+
+
+{- Straight up translation of some Python code -}
+
+deriveKey :: (ByteArray.ByteArrayAccess ikm, ByteArray.ByteArrayAccess info) => ikm -> info -> SecretBox.Key
+deriveKey key purpose =
+  fromMaybe (panic "Could not encode to SecretBox key") $ -- Impossible. We guarntee it's the right size.
+    Saltine.decode (HKDF.expand (HKDF.extract salt key :: HKDF.PRK SHA256) purpose keySize)
+  where
+    salt = "" :: ByteString
+    keySize = ByteSizes.secretBoxKey
+
+derivePhaseKey :: ByteArray.ByteArrayAccess ikm => ikm -> Messages.Side -> Messages.Phase -> SecretBox.Key
+derivePhaseKey key (Messages.Side side) phase =
+  deriveKey key purpose
+  where
+    purpose = "wormhole:phase:" <> sideHashDigest <> phaseHashDigest :: ByteString
+    sideHashDigest = hashDigest (toS @Text @ByteString side)
+    phaseHashDigest = hashDigest (toS @LByteString @ByteString (Aeson.encode phase))
+    hashDigest thing = ByteArray.convert (hashWith SHA256 thing)
+
+-- XXX: Different types for ciphertext and plaintext please!
+encrypt :: SecretBox.Key -> ByteString -> IO ByteString
+encrypt key message = do
+  nonce <- SecretBox.newNonce
+  let ciphertext = SecretBox.secretbox key nonce message
+  pure $ Saltine.encode nonce <> ciphertext
+
+decrypt :: SecretBox.Key -> ByteString -> Maybe ByteString
+decrypt key ciphertext = do
+  let (nonce', ciphertext') = ByteString.splitAt ByteSizes.secretBoxNonce ciphertext
+  nonce <- Saltine.decode nonce'
+  SecretBox.secretboxOpen key nonce ciphertext'
 
 
 data Error

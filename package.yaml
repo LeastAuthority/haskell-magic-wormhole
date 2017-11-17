@@ -22,12 +22,14 @@ library:
   source-dirs: src
   dependencies:
     - aeson
+    - bytestring
     - containers
     - cryptonite
     - hashable
     - memory
     - network
     - network-uri
+    - saltine
     - spake2 >= 0.3
     - stm
     - unordered-containers

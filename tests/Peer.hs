@@ -1,8 +1,8 @@
 module Peer (tests) where
 
-import Protolude
+import Protolude hiding (phase)
 
-import Hedgehog (MonadGen(..), forAll, property, tripping)
+import Hedgehog (MonadGen(..), forAll, property, tripping, (===))
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 import Test.Tasty (TestTree, testGroup)
@@ -21,6 +21,15 @@ tests = pure $ testGroup "Peer"
       let protocol = Peer.wormholeSpakeProtocol appID
       element <- forAll elements
       tripping element (Peer.encodeElement protocol) (Peer.decodeElement protocol)
+  , testProperty "SecretBox encryption roundtrips" $ property $ do
+      phase <- forAll MessagesTest.phases
+      side <- forAll MessagesTest.sides
+      secret <- forAll $ Gen.bytes (Range.linear 1 10)
+      let key = Peer.derivePhaseKey secret side phase
+      plaintext <- forAll $ Gen.bytes (Range.linear 1 256)
+      ciphertext <- liftIO $ Peer.encrypt key plaintext
+      let decrypted = Peer.decrypt key ciphertext
+      decrypted === Just plaintext
   ]
   where
     elements :: MonadGen m => m (Group.Element Ed25519)
