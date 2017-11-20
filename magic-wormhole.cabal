@@ -14,6 +14,9 @@ license:        Apache
 build-type:     Simple
 cabal-version:  >= 1.10
 
+data-files:
+    tests/python/version_exchange.py
+
 source-repository head
   type: git
   location: https://github.com/jml/haskell-magic-wormhole
@@ -71,14 +74,17 @@ test-suite tasty
       base
     , protolude >= 0.2
     , aeson
+    , bytestring
     , hedgehog
     , magic-wormhole
+    , process
     , spake2 >= 0.3
     , tasty
     , tasty-hedgehog
     , tasty-hspec
   other-modules:
       Generator
+      Integration
       Messages
       Peer
       WebSockets

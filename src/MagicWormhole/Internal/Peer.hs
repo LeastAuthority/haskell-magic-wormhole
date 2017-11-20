@@ -12,7 +12,10 @@ module MagicWormhole.Internal.Peer
   , decrypt
   , encrypt
   , deriveKey
+  , Spake2Message(..)
   , SessionKey(..) -- XXX: Figure out how to avoid exporting the constructors.
+  , Versions(..)
+  , phasePurpose
   ) where
 
 import Protolude hiding (phase)

@@ -50,10 +50,15 @@ tests:
     source-dirs: tests
     dependencies:
       - aeson
+      - bytestring
       - hedgehog
       - magic-wormhole
+      - process
       - spake2 >= 0.3
       - tasty
       - tasty-hedgehog
       - tasty-hspec
 
+# These are only for tests.
+data-files:
+  - tests/python/version_exchange.py
