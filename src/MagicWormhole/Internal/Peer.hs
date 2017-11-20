@@ -3,6 +3,7 @@
 -- Described as the "client" protocol in the Magic Wormhole documentation.
 module MagicWormhole.Internal.Peer
   ( pakeExchange
+  , versionExchange
   , Error
   -- * Exported for testing
   , wormholeSpakeProtocol
@@ -10,7 +11,8 @@ module MagicWormhole.Internal.Peer
   , encodeElement
   , decrypt
   , encrypt
-  , derivePhaseKey
+  , deriveKey
+  , SessionKey(..) -- XXX: Figure out how to avoid exporting the constructors.
   ) where
 
 import Protolude hiding (phase)
@@ -70,6 +72,9 @@ wormholeSpakeProtocol (Messages.AppID appID) =
     sideID = Spake2.SideID (toS appID)
 
 
+-- XXX: Lots of duplicated code sending JSON data. Either make a typeclass for
+-- this sort of thing or at least sendJSON, receiveJSON.
+
 -- TODO: I've been playing fast and loose with Text -> ByteString conversions
 -- (grep for `toS`) for the details. The Python implementation occasionally
 -- encodes as `ascii` rather than the expected `UTF-8`, so I need to be a bit
@@ -108,6 +113,62 @@ pakeExchange session password = do
       unless (Messages.phase msg == Messages.PakePhase) retry
       pure (decodeElement protocol (Messages.body msg))
 
+-- | Exchange version information with a Magic Wormhole peer.
+--
+-- Obtain the 'SessionKey' from 'pakeExchange'.
+versionExchange :: Rendezvous.Session -> SessionKey -> IO (Either Error Versions)
+versionExchange session key = do
+  (_, theirVersions) <- concurrently sendVersion receiveVersion
+  pure $ case theirVersions of
+    Left err -> Left err
+    Right theirs
+      | theirs /= Versions -> Left VersionMismatch
+      | otherwise -> Right Versions
+  where
+    sendVersion = sendEncrypted session key Messages.VersionPhase (toS (Aeson.encode Versions))
+    receiveVersion = runExceptT $ do
+      plaintext <- ExceptT $ receiveEncrypted session key
+      ExceptT $ pure $ first ParseError (Aeson.eitherDecode (toS plaintext))
+
+-- NOTE: Versions
+-- ~~~~~~~~~~~~~~
+--
+-- Magic Wormhole Python implementation sends the following as the 'version' phase:
+--     {"app_versions": {}}
+--
+-- The idea is that /some time in the future/ this will be used to indicate
+-- capabilities of peers. At present, it is unused, save as a confirmation
+-- that the SPAKE2 exchange worked.
+
+data Versions = Versions deriving (Eq, Show)
+
+instance ToJSON Versions where
+  toJSON _ = object ["app_versions" .= object []]
+
+instance FromJSON Versions where
+  parseJSON (Object v) = do
+    -- Make sure there's an object in the "app_versions" key and abort if not.
+    (Object _versions) <- v .: "app_versions"
+    pure Versions
+  parseJSON unknown = typeMismatch "Versions" unknown
+
+
+sendEncrypted :: Rendezvous.Session -> SessionKey -> Messages.Phase -> PlainText -> IO ()
+sendEncrypted session key phase plaintext = do
+  ciphertext <- encrypt derivedKey plaintext
+  Rendezvous.add session phase (Messages.Body ciphertext)
+  where
+    derivedKey = deriveKey key (phasePurpose (Rendezvous.sessionSide session) phase)
+
+receiveEncrypted :: Rendezvous.Session -> SessionKey -> IO (Either Error PlainText)
+receiveEncrypted session key = do
+  message <- atomically $ Rendezvous.readFromMailbox session
+  let Messages.Body ciphertext = Messages.body message
+  pure $ decrypt (derivedKey message) ciphertext
+  where
+    derivedKey msg = deriveKey key (phasePurpose (Rendezvous.sessionSide session) (Messages.phase msg))
+
+
 -- | The purpose of a message. 'deriveKey' combines this with the 'SessionKey'
 -- to make a unique 'SecretBox.Key'. Do not re-use a 'Purpose' to send more
 -- than message.
@@ -131,13 +192,13 @@ phasePurpose (Messages.Side side) phase = "wormhole:phase:" <> sideHashDigest <>
     phaseHashDigest = hashDigest (toS @LByteString @ByteString (Aeson.encode phase))
     hashDigest thing = ByteArray.convert (hashWith SHA256 thing)
 
-derivePhaseKey :: SessionKey -> Messages.Side -> Messages.Phase -> SecretBox.Key
-derivePhaseKey key side phase = deriveKey key (phasePurpose side phase)
-
 -- XXX: Different types for ciphertext and plaintext please!
+type CipherText = ByteString
+type PlainText = ByteString
+
 -- | Encrypt a message using 'SecretBox'. Get the key from 'deriveKey'.
 -- Decrypt with 'decrypt'.
-encrypt :: SecretBox.Key -> ByteString -> IO ByteString
+encrypt :: SecretBox.Key -> PlainText -> IO CipherText
 encrypt key message = do
   nonce <- SecretBox.newNonce
   let ciphertext = SecretBox.secretbox key nonce message
@@ -145,14 +206,17 @@ encrypt key message = do
 
 -- | Decrypt a message using 'SecretBox'. Get the key from 'deriveKey'.
 -- Encrypted using 'encrypt'.
-decrypt :: SecretBox.Key -> ByteString -> Maybe ByteString
+decrypt :: SecretBox.Key -> CipherText -> Either Error PlainText
 decrypt key ciphertext = do
   let (nonce', ciphertext') = ByteString.splitAt ByteSizes.secretBoxNonce ciphertext
-  nonce <- Saltine.decode nonce'
-  SecretBox.secretboxOpen key nonce ciphertext'
+  nonce <- note (InvalidNonce nonce') $ Saltine.decode nonce'
+  note (CouldNotDecrypt ciphertext') $ SecretBox.secretboxOpen key nonce ciphertext'
 
 
 data Error
   = ParseError String
   | ProtocolError Spake2.MessageError
+  | CouldNotDecrypt ByteString
+  | VersionMismatch
+  | InvalidNonce ByteString
   deriving (Eq, Show)

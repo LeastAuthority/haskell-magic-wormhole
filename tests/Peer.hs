@@ -23,14 +23,13 @@ tests = pure $ testGroup "Peer"
       element <- forAll elements
       tripping element (Peer.encodeElement protocol) (Peer.decodeElement protocol)
   , testProperty "SecretBox encryption roundtrips" $ property $ do
-      phase <- forAll Generator.phases
-      side <- forAll Generator.sides
-      secret <- forAll $ Gen.bytes (Range.linear 1 10)
-      let key = Peer.derivePhaseKey secret side phase
+      purpose <- forAll $ Gen.bytes (Range.linear 0 10)
+      secret <- forAll $ Gen.bytes (Range.linear 0 10)
+      let key = Peer.deriveKey (Peer.SessionKey secret) purpose
       plaintext <- forAll $ Gen.bytes (Range.linear 1 256)
       ciphertext <- liftIO $ Peer.encrypt key plaintext
       let decrypted = Peer.decrypt key ciphertext
-      decrypted === Just plaintext
+      decrypted === Right plaintext
   ]
   where
     elements :: MonadGen m => m (Group.Element Ed25519)
