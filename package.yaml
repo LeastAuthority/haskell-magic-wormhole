@@ -53,6 +53,7 @@ tests:
       - bytestring
       - hedgehog
       - magic-wormhole
+      - memory
       - process
       - spake2 >= 0.3
       - tasty
@@ -61,4 +62,5 @@ tests:
 
 # These are only for tests.
 data-files:
+  - tests/python/spake2_exchange.py
   - tests/python/version_exchange.py

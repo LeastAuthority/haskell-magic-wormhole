@@ -11,6 +11,7 @@ import Protolude hiding (stdin, stdout)
 
 import qualified Crypto.Spake2 as Spake2
 import qualified Data.Aeson as Aeson
+import Data.ByteArray.Encoding (convertToBase, Base(Base16))
 import qualified Data.ByteString as ByteString
 import qualified System.IO as IO
 import qualified System.Process as Process
@@ -24,7 +25,45 @@ import qualified Paths_magic_wormhole
 
 tests :: IO TestTree
 tests = testSpec "Integration" $
-  describe "SPAKE2 and version exchange" $
+  describe "SPAKE2 and version exchange" $ do
+    it "Generates the same SPAKE2 session key" $ do
+      let appID = "jml.io/haskell-magic-wormhole-test"
+      let ourSide = "treebeard" :: Text
+      let otherSide = "saruman" :: Text
+      let password = "mellon"
+      let password' = Spake2.makePassword password
+      scriptExe <- Paths_magic_wormhole.getDataFileName "tests/python/spake2_exchange.py"
+      let testScript = (Process.proc "python"
+                       [ scriptExe
+                       , "--app-id=" <> toS appID
+                       , "--side=" <> toS otherSide
+                       , "--code=" <> toS password
+                       ]) { Process.std_in = Process.CreatePipe
+                         , Process.std_out = Process.CreatePipe
+                         , Process.std_err = Process.Inherit
+                         }
+      Process.withCreateProcess testScript $
+        \(Just stdin) (Just stdout) _stderr ph -> do
+          IO.hSetBuffering stdin IO.LineBuffering
+          IO.hSetBuffering stdout IO.LineBuffering
+          IO.hSetBuffering stderr IO.LineBuffering
+          let protocol = Peer.wormholeSpakeProtocol (Messages.AppID appID)
+          theirPake <- readFromHandle stdout
+          let (Right inbound) = Peer.decodeElement protocol (Messages.body theirPake)
+          exchange <- Spake2.startSpake2 protocol password'
+          let outbound = Spake2.computeOutboundMessage exchange
+          sendToHandle stdin Messages.MailboxMessage
+            { Messages.phase = Messages.PakePhase
+            , Messages.side = Messages.Side ourSide
+            , Messages.body = Peer.encodeElement protocol outbound
+            , Messages.messageID = Nothing
+            }
+          let keyMaterial = Spake2.generateKeyMaterial exchange inbound
+          let sessionKey = Spake2.createSessionKey protocol inbound outbound keyMaterial password'
+          theirSpakeKey <- ByteString.hGetLine stdout
+          void $ Process.waitForProcess ph
+          theirSpakeKey `shouldBe` convertToBase Base16 sessionKey
+
     it "Works with our hacked-together Python implementation" $ do
       -- Launch the Python process
       -- If it fails due to command-not-found, print a warning and succeed
