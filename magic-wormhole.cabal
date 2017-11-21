@@ -15,6 +15,7 @@ build-type:     Simple
 cabal-version:  >= 1.10
 
 data-files:
+    tests/python/spake2_exchange.py
     tests/python/version_exchange.py
 
 source-repository head
@@ -77,6 +78,7 @@ test-suite tasty
     , bytestring
     , hedgehog
     , magic-wormhole
+    , memory
     , process
     , spake2 >= 0.3
     , tasty

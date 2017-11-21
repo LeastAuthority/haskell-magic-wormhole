@@ -31,21 +31,6 @@ from spake2 import SPAKE2_Symmetric
 wormhole  # Be still, pyflakes
 
 
-@attr.s
-class Params(object):
-    code = attr.ib()
-    app_id = attr.ib()
-    side = attr.ib()
-
-    @classmethod
-    def from_json(cls, json_value):
-        return cls(
-            code=json_value['code'],
-            appID=json_value['app_id'],
-            side=json_value['side'],
-        )
-
-
 def main():
     parser = argparse.ArgumentParser(prog='version_exchange')
     parser.add_argument(
@@ -67,7 +52,7 @@ def run_exchange(transport, code, app_id, side):
     spake = SPAKE2_Symmetric(
         util.to_bytes(code), idSymmetric=util.to_bytes(app_id))
     outbound = spake.start()
-    transport.send({
+    transport.send_json({
         'phase': u'pake',
         'body': util.bytes_to_hexstr(
             util.dict_to_bytes({
@@ -79,7 +64,7 @@ def run_exchange(transport, code, app_id, side):
     })
 
     # Receive SPAKE2 message
-    pake_msg = transport.receive()
+    pake_msg = transport.receive_json()
     inbound = util.hexstr_to_bytes(
         util.bytes_to_dict(
             util.hexstr_to_bytes(pake_msg['body'])
@@ -89,7 +74,7 @@ def run_exchange(transport, code, app_id, side):
 
     # Send the versions message
     version_phase = u'version'
-    transport.send({
+    transport.send_json({
         'phase': version_phase,
         'body': util.bytes_to_hexstr(
             encrypt_data(
@@ -102,7 +87,7 @@ def run_exchange(transport, code, app_id, side):
     })
 
     # Receive the versions message
-    versions = transport.receive()
+    versions = transport.receive_json()
     their_versions = util.bytes_to_dict(
         decrypt_data(
             derive_phase_key(spake_key, versions['side'], versions['phase']),
@@ -116,15 +101,16 @@ def run_exchange(transport, code, app_id, side):
 
 @attr.s
 class Transport(object):
+    # XXX: Duplicated with spake2_exchange.py
     input_stream = attr.ib()
     output_stream = attr.ib()
 
-    def send(self, json_value):
+    def send_json(self, json_value):
         self.output_stream.write(json.dumps(json_value))
         self.output_stream.write('\n')
         self.output_stream.flush()
 
-    def receive(self):
+    def receive_json(self):
         line = self.input_stream.readline()
         return json.loads(line.strip())
 
