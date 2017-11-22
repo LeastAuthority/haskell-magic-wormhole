@@ -22,6 +22,9 @@ module MagicWormhole.Internal.Rendezvous
     -- * Running a Rendezvous client
   , runClient
   , Session
+  , Error
+  , sessionAppID
+  , sessionSide
   ) where
 
 import Protolude hiding (list, phase)
@@ -70,21 +73,24 @@ import MagicWormhole.Internal.WebSockets (WebSocketEndpoint(..))
 -- - 'readFromMailbox' reads messages from the mailbox
 data Session
   = Session
-  { pendingVar :: TVar (HashMap ResponseType (TMVar Messages.ServerMessage))
+  { connection :: WS.Connection
+  , sessionAppID :: Messages.AppID -- ^ The 'AppID' of this running session
+  , sessionSide :: Messages.Side -- ^ The 'Side' of this running session
+  , pendingVar :: TVar (HashMap ResponseType (TMVar Messages.ServerMessage))
   , messageChan :: TQueue Messages.MailboxMessage
   , motd :: TMVar (Maybe Text)
-  , connection :: WS.Connection
   }
 
 -- | Create a new 'Session'.
 new :: WS.Connection -- ^ Active WebSocket connection to a Rendezvous Server.
+    -> Messages.AppID
+    -> Messages.Side
     -> STM Session  -- ^ Opaque 'Session' object.
-new connection
-  = Session
+new connection appID side
+  = Session connection appID side
   <$> newTVar mempty
   <*> newTQueue
   <*> newEmptyTMVar
-  <*> pure connection
 
 -- | Send a message to a Magic Wormhole Rendezvous server.
 send :: Session -- ^ An active session. Get this using 'runClient'.
@@ -120,13 +126,13 @@ runClient
   -> Messages.Side -- ^ Identifier for your side
   -> (Session -> IO a) -- ^ Action to perform inside the Magic Wormhole session
   -> IO (Either ServerError a) -- ^ The result of the action or a ServerError
-runClient (WebSocketEndpoint host port path) appID side' app =
+runClient (WebSocketEndpoint host port path) appID side app =
   map join $ Socket.withSocketsDo . WS.runClient host port path $ \ws -> do
-    session <- atomically $ new ws
+    session <- atomically $ new ws appID side
     race (readMessages session) (action session)
   where
     action session = do
-      bind session appID side'
+      bind session appID side
       Right <$> app session
 
     -- | Read messages from the websocket forever, or until we fail to handle one.
@@ -255,12 +261,25 @@ close session mailbox' mood' = do
 add :: HasCallStack => Session -> Messages.Phase -> Messages.Body -> IO ()
 add session phase body = send session (Messages.Add phase body)
 
+-- | Read a message from someone else from an open mailbox
+--
+-- Will block until we receive a message from someone who isn't us.
+-- Specifically, a message with a different 'side' to us.
+--
+-- Will discard all messages that are from us.
+readFromMailbox :: HasCallStack => Session -> STM Messages.MailboxMessage
+readFromMailbox session = do
+  msg <- readFromMailbox' session
+  if Messages.side msg == sessionSide session
+    then readFromMailbox session
+    else pure msg
+
 -- | Read a message from an open mailbox.
 --
 -- Will block if there's no message, or if we're in no state to receive
 -- messages (e.g. no mailbox open).
-readFromMailbox :: HasCallStack => Session -> IO Messages.MailboxMessage
-readFromMailbox session = atomically $ readTQueue (messageChan session)
+readFromMailbox' :: HasCallStack => Session -> STM Messages.MailboxMessage
+readFromMailbox' session = readTQueue (messageChan session)
 
 -- | Called when an RPC receives a message as a response that does not match
 -- the request.

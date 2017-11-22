@@ -8,7 +8,9 @@ import Protolude
 
 import qualified Options.Applicative as Opt
 
+import qualified Crypto.Spake2 as Spake2
 import qualified MagicWormhole.Internal.Messages as Messages
+import qualified MagicWormhole.Internal.Peer as Peer
 import qualified MagicWormhole.Internal.Rendezvous as Rendezvous
 import MagicWormhole.Internal.WebSockets (WebSocketEndpoint(..), parseWebSocketEndpoint)
 
@@ -48,18 +50,23 @@ commandParser = Opt.hsubparser $
 makeOptions :: Text -> Opt.Parser a -> Opt.ParserInfo a
 makeOptions headerText parser = Opt.info (Opt.helper <*> parser) (Opt.fullDesc <> Opt.header (toS headerText))
 
+data Error
+  = PeerError Peer.Error
+  | RendezvousError Rendezvous.Error
+  deriving (Eq, Show)
+
 -- | Execute 'Command' against a Wormhole Rendezvous server.
 app :: Command -> Rendezvous.Session -> IO ()
 app command session = do
   result <- runExceptT $ do
     print command
-    nameplate <- ExceptT $ Rendezvous.allocate session
-    mailbox <- ExceptT $ Rendezvous.claim session nameplate
+    nameplate <- ExceptT $ first RendezvousError <$> Rendezvous.allocate session
+    mailbox <- ExceptT $ first RendezvousError <$> Rendezvous.claim session nameplate
     liftIO $ Rendezvous.open session mailbox  -- XXX: We should run `close` in the case of exceptions?
-    liftIO $ Rendezvous.add session (Messages.Phase "foo") (Messages.Body "hahaha")
-    message <- liftIO $ Rendezvous.readFromMailbox session
-    print message
-    ExceptT $ Rendezvous.close session (Just mailbox) (Just Messages.Happy)
+    let (Messages.Nameplate n) = nameplate
+    key <- ExceptT $ first PeerError <$> Peer.pakeExchange session (Spake2.makePassword (toS n <> "-potato"))
+    print key
+    ExceptT $ first RendezvousError <$> Rendezvous.close session (Just mailbox) (Just Messages.Happy)
   case result of
     Left err -> die $ "Failed to " <> show command <> ": " <> show err
     Right _ -> pass

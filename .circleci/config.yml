@@ -28,4 +28,4 @@ jobs:
             - .stack-work
       - run:
           name: Tests
-          command: stack test --skip-ghc-check --no-terminal
+          command: stack test --skip-ghc-check --no-terminal magic-wormhole

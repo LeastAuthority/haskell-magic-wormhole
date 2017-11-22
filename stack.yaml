@@ -6,3 +6,4 @@ packages:
 extra-deps:
   - protolude-0.2
   - tasty-hedgehog-0.1.0.1
+  - spake2-0.3.0

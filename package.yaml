@@ -16,16 +16,19 @@ default-extensions:
 
 dependencies:
   - base
-  - protolude
+  - protolude >= 0.2
 
 library:
   source-dirs: src
   dependencies:
     - aeson
+    - containers
+    - cryptonite
     - hashable
     - memory
     - network
     - network-uri
+    - spake2 >= 0.3
     - stm
     - unordered-containers
     - websockets
@@ -37,6 +40,7 @@ executables:
     dependencies:
       - magic-wormhole
       - optparse-applicative
+      - spake2 >= 0.3
 
 tests:
   tasty:
@@ -46,6 +50,7 @@ tests:
       - aeson
       - hedgehog
       - magic-wormhole
+      - spake2 >= 0.3
       - tasty
       - tasty-hedgehog
       - tasty-hspec

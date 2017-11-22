@@ -1,4 +1,7 @@
-module Messages (tests) where
+module Messages
+  ( tests
+  , appIDs
+  ) where
 
 import Protolude
 
@@ -25,7 +28,7 @@ import MagicWormhole.Internal.Messages
   )
 
 tests :: IO TestTree
-tests = pure $ testGroup "Rendezvous"
+tests = pure $ testGroup "Messages"
   [ testProperty "client messages roundtrip" $ property $ do
       x <- forAll clientMessages
       tripping x encode eitherDecode
@@ -51,13 +54,22 @@ messageIDs :: MonadGen m => m MessageID
 messageIDs = MessageID <$> Gen.int16 (Range.linear 0 maxBound)
 
 appIDs :: MonadGen m => m AppID
-appIDs = AppID <$> Gen.text (Range.linear 0 100) Gen.unicode
+appIDs = AppID <$> Gen.choice [ Gen.text (Range.linear 0 100) Gen.unicode
+                              , Gen.element
+                                [ "lothar.com/wormhole/text-or-file-xfer"
+                                , "tahoe-lafs.org/tahoe-lafs/v1"
+                                ]
+                              ]
 
 sides :: MonadGen m => m Side
 sides = Side <$> Gen.text (Range.linear 0 10) Gen.hexit
 
 phases :: MonadGen m => m Phase
-phases = Phase <$> Gen.text (Range.linear 0 20) Gen.unicode
+phases = Gen.choice
+  [ pure PakePhase
+  , pure VersionPhase
+  , ApplicationPhase <$> Gen.int (Range.linear 0 maxBound)
+  ]
 
 bodies :: MonadGen m => m Body
 bodies = Body <$> Gen.bytes (Range.linear 0 1024)

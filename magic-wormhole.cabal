@@ -25,17 +25,21 @@ library
   ghc-options: -Wall
   build-depends:
       base
-    , protolude
+    , protolude >= 0.2
     , aeson
+    , containers
+    , cryptonite
     , hashable
     , memory
     , network
     , network-uri
+    , spake2 >= 0.3
     , stm
     , unordered-containers
     , websockets
   exposed-modules:
       MagicWormhole.Internal.Messages
+      MagicWormhole.Internal.Peer
       MagicWormhole.Internal.Rendezvous
       MagicWormhole.Internal.WebSockets
   default-language: Haskell2010
@@ -48,9 +52,10 @@ executable hocus-pocus
   ghc-options: -Wall
   build-depends:
       base
-    , protolude
+    , protolude >= 0.2
     , magic-wormhole
     , optparse-applicative
+    , spake2 >= 0.3
   default-language: Haskell2010
 
 test-suite tasty
@@ -62,14 +67,16 @@ test-suite tasty
   ghc-options: -Wall
   build-depends:
       base
-    , protolude
+    , protolude >= 0.2
     , aeson
     , hedgehog
     , magic-wormhole
+    , spake2 >= 0.3
     , tasty
     , tasty-hedgehog
     , tasty-hspec
   other-modules:
       Messages
+      Peer
       WebSockets
   default-language: Haskell2010
