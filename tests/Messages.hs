@@ -54,7 +54,12 @@ messageIDs :: MonadGen m => m MessageID
 messageIDs = MessageID <$> Gen.int16 (Range.linear 0 maxBound)
 
 appIDs :: MonadGen m => m AppID
-appIDs = AppID <$> Gen.text (Range.linear 0 100) Gen.unicode
+appIDs = AppID <$> Gen.choice [ Gen.text (Range.linear 0 100) Gen.unicode
+                              , Gen.element
+                                [ "lothar.com/wormhole/text-or-file-xfer"
+                                , "tahoe-lafs.org/tahoe-lafs/v1"
+                                ]
+                              ]
 
 sides :: MonadGen m => m Side
 sides = Side <$> Gen.text (Range.linear 0 10) Gen.hexit
