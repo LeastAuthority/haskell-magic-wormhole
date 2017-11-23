@@ -36,14 +36,16 @@ tests = testSpec "Integration" $ do
       let appID = "jml.io/haskell-magic-wormhole-test"
       let password = "mellon"
       let password' = Spake2.makePassword password
+      let ourSide = "treebeard"
+      let theirSide = "saruman"
       interactWithPython "tests/python/spake2_exchange.py"
-        [  "--app-id=" <> toS appID
+        [ "--app-id=" <> toS appID
         , "--code=" <> toS password
+        , "--side=" <> theirSide
         ] $ \stdin stdout -> do
           let protocol = Peer.wormholeSpakeProtocol (Messages.AppID appID)
           Right sessionKey <- Spake2.spake2Exchange protocol password'
-                              (Char8.hPutStrLn stdin . convertToBase Base16)
-                              (convertFromBase Base16 <$> ByteString.hGetLine stdout)
+            (sendPakeBytes stdin ourSide) (receivePakeBytes stdout)
           -- Calculate the shared key
           theirSpakeKey <- ByteString.hGetLine stdout
           theirSpakeKey `shouldBe` convertToBase Base16 sessionKey

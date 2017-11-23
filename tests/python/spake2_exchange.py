@@ -27,28 +27,44 @@ wormhole  # Be still, pyflakes
 
 
 def main():
-    parser = argparse.ArgumentParser(prog='version_exchange')
+    parser = argparse.ArgumentParser(prog='spake2_exchange')
     parser.add_argument(
         '--code', dest='code', type=unicode,
         help='Password to use to connect to other side')
+    parser.add_argument(
+        '--side', dest='side', type=unicode,
+        help='Identifier for this side of the exchange')
     parser.add_argument(
         '--app-id', dest='app_id', type=unicode,
         help='Identifier for the application')
     params = parser.parse_args(sys.argv[1:])
     transport = Transport(input_stream=sys.stdin, output_stream=sys.stdout)
-    run_exchange(transport, params.code, params.app_id)
+    run_exchange(transport, params.code, params.app_id, params.side)
 
 
-def run_exchange(transport, code, app_id):
+def run_exchange(transport, code, app_id, side):
     # Send the SPAKE2 message
     spake = SPAKE2_Symmetric(
         util.to_bytes(code), idSymmetric=util.to_bytes(app_id))
     outbound = spake.start()
-    transport.send_line(util.bytes_to_hexstr(outbound))
+    transport.send_json({
+        'phase': u'pake',
+        'body': util.bytes_to_hexstr(
+            util.dict_to_bytes({
+                'pake_v1': util.bytes_to_hexstr(outbound),
+            })
+        ),
+        'side': side,
+        'type': 'message',
+    })
 
     # Receive SPAKE2 message
-    pake_msg = transport.receive_line()
-    inbound = util.hexstr_to_bytes(pake_msg)
+    pake_msg = transport.receive_json()
+    inbound = util.hexstr_to_bytes(
+        util.bytes_to_dict(
+            util.hexstr_to_bytes(pake_msg['body'])
+        )['pake_v1']
+    )
     spake_key = spake.finish(inbound)
     transport.send_line(util.bytes_to_hexstr(spake_key))
 
