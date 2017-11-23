@@ -60,7 +60,7 @@ tests = testSpec "Integration" $ do
       interactWithPython "tests/python/derive_phase_key.py"
         [ "--spake-key=" <> toS (convertToBase Base16 fakeSpakeKey :: ByteString)
         , "--side=" <> toS side
-        , "--phase=" <> toS (Aeson.encode phase)
+        , "--phase=" <> toS (Messages.phaseName phase)
         ] $ \_stdin stdout -> do
           theirPhaseKey <- ByteString.hGetLine stdout
           theirPhaseKey `shouldBe` convertToBase Base16 (Saltine.encode ourPhaseKey)

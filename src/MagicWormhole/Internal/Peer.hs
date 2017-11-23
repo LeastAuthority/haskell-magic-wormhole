@@ -153,7 +153,7 @@ receiveEncrypted session key = do
   let Messages.Body ciphertext = Messages.body message
   pure $ decrypt (derivedKey message) ciphertext
   where
-    derivedKey msg = deriveKey key (phasePurpose (Rendezvous.sessionSide session) (Messages.phase msg))
+    derivedKey msg = deriveKey key (phasePurpose (Messages.side msg) (Messages.phase msg))
 
 
 -- | The purpose of a message. 'deriveKey' combines this with the 'SessionKey'
@@ -176,7 +176,7 @@ phasePurpose :: Messages.Side -> Messages.Phase -> Purpose
 phasePurpose (Messages.Side side) phase = "wormhole:phase:" <> sideHashDigest <> phaseHashDigest
   where
     sideHashDigest = hashDigest (toS @Text @ByteString side)
-    phaseHashDigest = hashDigest (toS @LByteString @ByteString (Aeson.encode phase))
+    phaseHashDigest = hashDigest (toS (Messages.phaseName phase) :: ByteString)
     hashDigest thing = ByteArray.convert (hashWith SHA256 thing)
 
 -- XXX: Different types for ciphertext and plaintext please!
