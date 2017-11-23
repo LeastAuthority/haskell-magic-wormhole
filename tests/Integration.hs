@@ -56,13 +56,14 @@ tests = testSpec "Integration" $
         , "--code=" <> toS password
         ] $ \stdin stdout -> do
           let protocol = Peer.wormholeSpakeProtocol (Messages.AppID appID)
-          Right sessionKey <- Peer.SessionKey <<$>> Spake2.spake2Exchange protocol password' (send stdin ourSide) (receive stdout)
+          Right sessionKey <- Peer.SessionKey <<$>> Spake2.spake2Exchange protocol password'
+            (sendPakeBytes stdin ourSide) (receivePakeBytes stdout)
           -- Receive their versions message
-          theirVersions <- readFromHandle stdout
+          theirVersions <- readMailboxMessage stdout
           -- Send our versions message
           let ourKey = Peer.deriveKey sessionKey (Peer.phasePurpose (Messages.Side ourSide) Messages.VersionPhase)
           encrypted <- Peer.encrypt ourKey (toS (Aeson.encode Peer.Versions))
-          sendToHandle stdin Messages.MailboxMessage
+          sendMailboxMessage stdin Messages.MailboxMessage
             { Messages.phase = Messages.VersionPhase
             , Messages.side = Messages.Side ourSide
             , Messages.body = Messages.Body encrypted
@@ -75,19 +76,6 @@ tests = testSpec "Integration" $
           let Right plaintext = Peer.decrypt theirKey ciphertext
           let Right versions = Aeson.eitherDecode (toS plaintext)
           versions `shouldBe` Peer.Versions
-          where
-            send stdin ourSide pakeBytes = do
-              let body = Peer.spakeBytesToMessageBody pakeBytes
-              sendToHandle stdin Messages.MailboxMessage
-                { Messages.phase = Messages.PakePhase
-                , Messages.side = Messages.Side ourSide
-                , Messages.body = body
-                , Messages.messageID = Nothing
-                }
-            receive stdout = do
-              theirMessage <- readFromHandle stdout
-              Messages.phase theirMessage `shouldBe` Messages.PakePhase
-              pure . Peer.messageBodyToSpakeBytes . Messages.body $ theirMessage
 
 
 -- | Run a Python script and interact with it by sending stuff to its stdin
@@ -116,8 +104,28 @@ interactWithPython name args action = do
       IO.hSetBuffering stderr IO.LineBuffering
       action stdin stdout `finally` Process.waitForProcess ph
 
-readFromHandle :: HasCallStack => Handle -> IO Messages.MailboxMessage
-readFromHandle h = do
+
+-- | Send SPAKE2 bytes as a mailbox message to a file handle.
+sendPakeBytes :: Handle -> Text -> ByteString -> IO ()
+sendPakeBytes stdin ourSide pakeBytes = do
+  let body = Peer.spakeBytesToMessageBody pakeBytes
+  sendMailboxMessage stdin Messages.MailboxMessage
+    { Messages.phase = Messages.PakePhase
+    , Messages.side = Messages.Side ourSide
+    , Messages.body = body
+    , Messages.messageID = Nothing
+    }
+
+-- | Receive SPAKE2 bytes as a mailbox message from a file handle.
+receivePakeBytes :: Handle -> IO (Either Text ByteString)
+receivePakeBytes stdout = do
+  theirMessage <- readMailboxMessage stdout
+  Messages.phase theirMessage `shouldBe` Messages.PakePhase
+  pure . Peer.messageBodyToSpakeBytes . Messages.body $ theirMessage
+
+
+readMailboxMessage :: HasCallStack => Handle -> IO Messages.MailboxMessage
+readMailboxMessage h = do
   line <- ByteString.hGetLine h
   case Aeson.eitherDecode (toS line) of
     Left err -> do
@@ -128,5 +136,5 @@ readFromHandle h = do
       hPutStrLn @Text stderr $ "Decoded line to non-MailboxMessage: " <> show other
       panic (show other)
 
-sendToHandle :: HasCallStack => Handle -> Messages.MailboxMessage -> IO ()
-sendToHandle h msg = hPutStrLn h (Aeson.encode (Messages.Message msg))
+sendMailboxMessage :: HasCallStack => Handle -> Messages.MailboxMessage -> IO ()
+sendMailboxMessage h msg = hPutStrLn h (Aeson.encode (Messages.Message msg))
