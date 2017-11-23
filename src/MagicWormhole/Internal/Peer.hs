@@ -67,7 +67,7 @@ wormholeSpakeProtocol :: Messages.AppID -> Spake2Protocol
 wormholeSpakeProtocol (Messages.AppID appID) =
   Spake2.makeSymmetricProtocol SHA256 Ed25519 blind sideID
   where
-    blind = arbitraryElement Ed25519 ("S" :: ByteString)
+    blind = arbitraryElement Ed25519 ("symmetric" :: ByteString)
     sideID = Spake2.SideID (toS appID)
 
 
