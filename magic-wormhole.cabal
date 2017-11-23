@@ -39,7 +39,7 @@ library
     , network
     , network-uri
     , saltine
-    , spake2 >= 0.3
+    , spake2 >= 0.4
     , stm
     , unordered-containers
     , websockets
@@ -61,7 +61,7 @@ executable hocus-pocus
     , protolude >= 0.2
     , magic-wormhole
     , optparse-applicative
-    , spake2 >= 0.3
+    , spake2 >= 0.4
   default-language: Haskell2010
 
 test-suite tasty

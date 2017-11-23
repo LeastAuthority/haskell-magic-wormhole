@@ -30,7 +30,7 @@ library:
     - network
     - network-uri
     - saltine
-    - spake2 >= 0.3
+    - spake2 >= 0.4
     - stm
     - unordered-containers
     - websockets
@@ -42,7 +42,7 @@ executables:
     dependencies:
       - magic-wormhole
       - optparse-applicative
-      - spake2 >= 0.3
+      - spake2 >= 0.4
 
 tests:
   tasty:

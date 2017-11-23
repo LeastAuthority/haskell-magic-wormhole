@@ -7,15 +7,14 @@ module MagicWormhole.Internal.Peer
   , Error
   -- * Exported for testing
   , wormholeSpakeProtocol
-  , decodeElement
-  , encodeElement
   , decrypt
   , encrypt
   , deriveKey
-  , Spake2Message(..)
   , SessionKey(..) -- XXX: Figure out how to avoid exporting the constructors.
   , Versions(..)
   , phasePurpose
+  , spakeBytesToMessageBody
+  , messageBodyToSpakeBytes
   ) where
 
 import Protolude hiding (phase)
@@ -27,7 +26,7 @@ import qualified Crypto.Saltine.Internal.ByteSizes as ByteSizes
 import qualified Crypto.Saltine.Class as Saltine
 import qualified Crypto.Saltine.Core.SecretBox as SecretBox
 import qualified Crypto.Spake2 as Spake2
-import Crypto.Spake2.Group (Group(Element, arbitraryElement))
+import Crypto.Spake2.Group (Group(arbitraryElement))
 import Crypto.Spake2.Groups (Ed25519(..))
 import Data.Aeson (FromJSON, ToJSON, (.=), object, Value(..), (.:))
 import Data.Aeson.Types (typeMismatch)
@@ -43,7 +42,7 @@ import qualified MagicWormhole.Internal.Rendezvous as Rendezvous
 -- | The version of the SPAKE2 protocol used by Magic Wormhole.
 type Spake2Protocol = Spake2.Protocol Ed25519 SHA256
 
-newtype Spake2Message = Spake2Message ByteString deriving (Eq, Show)
+newtype Spake2Message = Spake2Message { spake2Bytes :: ByteString } deriving (Eq, Show)
 
 instance ToJSON Spake2Message where
   toJSON (Spake2Message msg) = object [ "pake_v1" .= toS @ByteString @Text (convertToBase Base16 msg) ]
@@ -56,15 +55,12 @@ instance FromJSON Spake2Message where
       Right key -> pure $ Spake2Message key
   parseJSON unknown = typeMismatch "Spake2Message" unknown
 
-type Spake2Element = Element Ed25519
+spakeBytesToMessageBody :: ByteString -> Messages.Body
+spakeBytesToMessageBody = Messages.Body . toS . Aeson.encode . Spake2Message
 
-decodeElement :: Spake2Protocol -> Messages.Body -> Either Error Spake2Element
-decodeElement protocol (Messages.Body body) = do
-  Spake2Message msg <- first ParseError (Aeson.eitherDecode (toS body))
-  first ProtocolError $ Spake2.extractElement protocol msg
-
-encodeElement :: Spake2Protocol -> Spake2Element -> Messages.Body
-encodeElement protocol = Messages.Body . toS . Aeson.encode . Spake2Message . Spake2.elementToMessage protocol
+messageBodyToSpakeBytes :: Messages.Body -> Either Text ByteString
+messageBodyToSpakeBytes (Messages.Body bodyBytes) =
+  bimap toS spake2Bytes . Aeson.eitherDecode . toS $ bodyBytes
 
 -- | Construct a SPAKE2 protocol compatible with Magic Wormhole.
 wormholeSpakeProtocol :: Messages.AppID -> Spake2Protocol
@@ -94,27 +90,15 @@ newtype SessionKey = SessionKey ByteString
 pakeExchange :: Rendezvous.Session -> Spake2.Password -> IO (Either Error SessionKey)
 pakeExchange session password = do
   let protocol = wormholeSpakeProtocol (Rendezvous.sessionAppID session)
-  exchange <- Spake2.startSpake2 protocol password
-  let outbound = Spake2.computeOutboundMessage exchange
-  (_, inbound) <- concurrently (sendPakeMessage protocol outbound) (atomically (receivePakeMessage protocol))
-  case inbound of
-    Left err -> pure (Left err)  -- Could not parse the SPAKE2 message
-    Right inbound' ->
-      let
-        keyMaterial = Spake2.generateKeyMaterial exchange inbound'
-        sessionKey = Spake2.createSessionKey protocol inbound' outbound keyMaterial password
-      in pure . Right . SessionKey $ sessionKey
+  bimap ProtocolError SessionKey <$> Spake2.spake2Exchange protocol password sendPakeMessage (atomically receivePakeMessage)
   where
-    sendPakeMessage protocol outbound =
-      let body = encodeElement protocol outbound
-      in Rendezvous.add session Messages.PakePhase body
-
-    receivePakeMessage protocol = do
+    sendPakeMessage = Rendezvous.add session Messages.PakePhase . spakeBytesToMessageBody
+    receivePakeMessage  = do
       -- XXX: This is kind of a fun approach, but it means that everyone else
       -- has to promise that they *don't* consume pake messages.
       msg <- Rendezvous.readFromMailbox session
       unless (Messages.phase msg == Messages.PakePhase) retry
-      pure (decodeElement protocol (Messages.body msg))
+      pure $ messageBodyToSpakeBytes (Messages.body msg)
 
 -- | Exchange version information with a Magic Wormhole peer.
 --
@@ -218,7 +202,7 @@ decrypt key ciphertext = do
 
 data Error
   = ParseError String
-  | ProtocolError Spake2.MessageError
+  | ProtocolError (Spake2.MessageError Text)
   | CouldNotDecrypt ByteString
   | VersionMismatch
   | InvalidNonce ByteString
