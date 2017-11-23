@@ -10,6 +10,7 @@ module Integration (tests) where
 import Protolude hiding (phase, stdin, stdout)
 
 import qualified Crypto.Saltine.Class as Saltine
+import qualified Crypto.Saltine.Core.SecretBox as SecretBox
 import qualified Data.Aeson as Aeson
 import Data.ByteArray.Encoding (convertFromBase, convertToBase, Base(Base16))
 import qualified Data.ByteString as ByteString
@@ -29,7 +30,7 @@ import qualified MagicWormhole.Internal.Peer as Peer
 import qualified Paths_magic_wormhole
 
 tests :: IO TestTree
-tests = testSpec "Integration" $
+tests = testSpec "Integration" $ do
   describe "SPAKE2 and version exchange" $ do
     it "Generates the same SPAKE2 session key" $ do
       let appID = "jml.io/haskell-magic-wormhole-test"
@@ -94,6 +95,24 @@ tests = testSpec "Integration" $
           let Right plaintext = Peer.decrypt theirKey ciphertext
           let Right versions = Aeson.eitherDecode (toS plaintext)
           versions `shouldBe` Peer.Versions
+
+  describe "NaCL interoperability" $
+    it "Swaps messages with Python" $ do
+      key <- SecretBox.newKey
+      nonce <- SecretBox.newNonce
+      interactWithPython "tests/python/nacl_exchange.py"
+        [ "--key=" <> toS (convertToBase Base16 (Saltine.encode key) :: ByteString)
+        , "--nonce=" <> toS (convertToBase Base16 (Saltine.encode nonce) :: ByteString)
+        ] $ \stdin stdout -> do
+          let message = "Hello world!"
+          encryptedByUs <- Peer.encrypt key message
+          Char8.hPutStrLn stdin (convertToBase Base16 encryptedByUs :: ByteString)
+          decryptedByPython <- ByteString.hGetLine stdout
+          decryptedByPython `shouldBe` message
+          encryptedByPython <- ByteString.hGetLine stdout
+          let Right encryptedBytes = convertFromBase Base16 encryptedByPython
+          let Right decryptedByUs = Peer.decrypt key encryptedBytes
+          decryptedByUs `shouldBe` message
 
 
 -- | Run a Python script and interact with it by sending stuff to its stdin

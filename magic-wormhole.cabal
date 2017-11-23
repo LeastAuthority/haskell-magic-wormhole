@@ -16,6 +16,7 @@ cabal-version:  >= 1.10
 
 data-files:
     tests/python/derive_phase_key.py
+    tests/python/nacl_exchange.py
     tests/python/spake2_exchange.py
     tests/python/version_exchange.py
 

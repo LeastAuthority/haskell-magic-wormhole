@@ -64,5 +64,6 @@ tests:
 # These are only for tests.
 data-files:
   - tests/python/derive_phase_key.py
+  - tests/python/nacl_exchange.py
   - tests/python/spake2_exchange.py
   - tests/python/version_exchange.py
