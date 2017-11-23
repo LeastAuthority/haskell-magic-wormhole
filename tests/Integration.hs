@@ -13,6 +13,7 @@ import qualified Data.Aeson as Aeson
 import Data.ByteArray.Encoding (convertFromBase, convertToBase, Base(Base16))
 import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Char8 as Char8
+import Data.String (String)
 import qualified System.IO as IO
 import qualified System.Process as Process
 import Test.Tasty (TestTree)
@@ -31,29 +32,16 @@ tests = testSpec "Integration" $
       let appID = "jml.io/haskell-magic-wormhole-test"
       let password = "mellon"
       let password' = Spake2.makePassword password
-      scriptExe <- Paths_magic_wormhole.getDataFileName "tests/python/spake2_exchange.py"
-      let testScript = (Process.proc "python"
-                       [ scriptExe
-                       , "--app-id=" <> toS appID
-                       , "--code=" <> toS password
-                       ]) { Process.std_in = Process.CreatePipe
-                         , Process.std_out = Process.CreatePipe
-                         , Process.std_err = Process.Inherit  -- So we get stack traces printed during test runs.
-                         }
-      Process.withCreateProcess testScript $
-        \(Just stdin) (Just stdout) _stderr ph -> do
-          -- The inter-process protocol is line-based.
-          IO.hSetBuffering stdin IO.LineBuffering
-          IO.hSetBuffering stdout IO.LineBuffering
-          IO.hSetBuffering stderr IO.LineBuffering
+      interactWithPython "tests/python/spake2_exchange.py"
+        [  "--app-id=" <> toS appID
+        , "--code=" <> toS password
+        ] $ \stdin stdout -> do
           let protocol = Peer.wormholeSpakeProtocol (Messages.AppID appID)
           Right sessionKey <- Spake2.spake2Exchange protocol password'
                               (Char8.hPutStrLn stdin . convertToBase Base16)
                               (convertFromBase Base16 <$> ByteString.hGetLine stdout)
           -- Calculate the shared key
           theirSpakeKey <- ByteString.hGetLine stdout
-          -- Wait for the process to finish so we can get full stack trace in case of error.
-          void $ Process.waitForProcess ph
           theirSpakeKey `shouldBe` convertToBase Base16 sessionKey
 
     it "Works with our hacked-together Python implementation" $ do
@@ -62,22 +50,11 @@ tests = testSpec "Integration" $
       let otherSide = "saruman" :: Text
       let password = "mellon"
       let password' = Spake2.makePassword password
-      scriptExe <- Paths_magic_wormhole.getDataFileName "tests/python/version_exchange.py"
-      let testScript = (Process.proc "python"
-                       [ scriptExe
-                       , "--app-id=" <> toS appID
-                       , "--side=" <> toS otherSide
-                       , "--code=" <> toS password
-                       ]) { Process.std_in = Process.CreatePipe
-                         , Process.std_out = Process.CreatePipe
-                         , Process.std_err = Process.Inherit
-                         }
-      Process.withCreateProcess testScript $
-        \(Just stdin) (Just stdout) _stderr ph -> do
-          -- The inter-process protocol is line-based.
-          IO.hSetBuffering stdin IO.LineBuffering
-          IO.hSetBuffering stdout IO.LineBuffering
-          IO.hSetBuffering stderr IO.LineBuffering
+      interactWithPython "tests/python/version_exchange.py"
+        [ "--app-id=" <> toS appID
+        , "--side=" <> toS otherSide
+        , "--code=" <> toS password
+        ] $ \stdin stdout -> do
           let protocol = Peer.wormholeSpakeProtocol (Messages.AppID appID)
           Right sessionKey <- Peer.SessionKey <<$>> Spake2.spake2Exchange protocol password' (send stdin ourSide) (receive stdout)
           -- Receive their versions message
@@ -92,9 +69,6 @@ tests = testSpec "Integration" $
             , Messages.messageID = Nothing
             }
           Messages.phase theirVersions `shouldBe` Messages.VersionPhase
-          -- Wait for the process to end so we get full stack trace, if any.
-          -- XXX: Assert successful exit
-          void $ Process.waitForProcess ph
           -- Decrypt their versions message.
           let (Messages.Body ciphertext) = Messages.body theirVersions
           let theirKey = Peer.deriveKey sessionKey (Peer.phasePurpose (Messages.Side otherSide) Messages.VersionPhase)
@@ -115,6 +89,32 @@ tests = testSpec "Integration" $
               Messages.phase theirMessage `shouldBe` Messages.PakePhase
               pure . Peer.messageBodyToSpakeBytes . Messages.body $ theirMessage
 
+
+-- | Run a Python script and interact with it by sending stuff to its stdin
+-- and reading from its stdout using a line-based protocol.
+--
+-- The Python process's stderr will inherit from this one, so we get Python
+-- stack traces in our test runner output. The interaction won't terminate
+-- until the Python process does, so that we can get full output from it,
+-- especially in the case of errors.
+interactWithPython
+  :: FilePath -- ^ Name of the script to run
+  -> [String] -- ^ Arguments to the script
+  -> (Handle -> Handle -> IO a)  -- ^ Interaction with the script, params are stdin & stdout.
+  -> IO a  -- ^ Result of the interaction.
+interactWithPython name args action = do
+  scriptExe <- Paths_magic_wormhole.getDataFileName name
+  let testScript = (Process.proc "python" (scriptExe:args))
+                   { Process.std_in = Process.CreatePipe
+                   , Process.std_out = Process.CreatePipe
+                   , Process.std_err = Process.Inherit
+                   }
+  Process.withCreateProcess testScript $
+    \(Just stdin) (Just stdout) _stderr ph -> do
+      IO.hSetBuffering stdin IO.LineBuffering
+      IO.hSetBuffering stdout IO.LineBuffering
+      IO.hSetBuffering stderr IO.LineBuffering
+      action stdin stdout `finally` Process.waitForProcess ph
 
 readFromHandle :: HasCallStack => Handle -> IO Messages.MailboxMessage
 readFromHandle h = do
