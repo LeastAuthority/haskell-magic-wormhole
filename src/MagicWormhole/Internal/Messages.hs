@@ -9,6 +9,7 @@ module MagicWormhole.Internal.Messages
   , MessageID(..)
   , Side(..)
   , Phase(..)
+  , phaseName
   , Body(..)
   , Nameplate(..)
   , Mailbox(..)
@@ -160,12 +161,15 @@ data Phase
   | ApplicationPhase Int
   deriving (Eq, Show)
 
+-- | Get the name of the phase. Used to derive message keys.
+phaseName :: Phase -> Text
+phaseName PakePhase = "pake"
+phaseName VersionPhase = "version"
+phaseName (ApplicationPhase n) = show n
 -- TODO: Add test to ensure this can be cleanly encoded & decoded to ASCII.
 
 instance ToJSON Phase where
-  toJSON PakePhase = "pake"
-  toJSON VersionPhase = "version"
-  toJSON (ApplicationPhase n) = toJSON (show n :: Text)
+  toJSON = toJSON . phaseName
 
 instance FromJSON Phase where
   parseJSON (String "pake") = pure PakePhase
