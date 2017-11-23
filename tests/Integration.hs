@@ -47,17 +47,10 @@ tests = testSpec "Integration" $
           IO.hSetBuffering stdout IO.LineBuffering
           IO.hSetBuffering stderr IO.LineBuffering
           let protocol = Peer.wormholeSpakeProtocol (Messages.AppID appID)
-          -- Receive their SPAKE2 material
-          theirPakeHex <- ByteString.hGetLine stdout
-          let Right theirPake = convertFromBase Base16 theirPakeHex
-          let Right inbound = Spake2.extractElement protocol theirPake
-          exchange <- Spake2.startSpake2 protocol password'
-          -- Send our SPAKE2 material
-          let outbound = Spake2.computeOutboundMessage exchange
-          Char8.hPutStrLn stdin (convertToBase Base16 (Spake2.elementToMessage protocol outbound))
+          Right sessionKey <- Spake2.spake2Exchange protocol password'
+                              (Char8.hPutStrLn stdin . convertToBase Base16)
+                              (convertFromBase Base16 <$> ByteString.hGetLine stdout)
           -- Calculate the shared key
-          let keyMaterial = Spake2.generateKeyMaterial exchange inbound
-          let sessionKey = Spake2.createSessionKey protocol inbound outbound keyMaterial password'
           theirSpakeKey <- ByteString.hGetLine stdout
           -- Wait for the process to finish so we can get full stack trace in case of error.
           void $ Process.waitForProcess ph
@@ -86,21 +79,7 @@ tests = testSpec "Integration" $
           IO.hSetBuffering stdout IO.LineBuffering
           IO.hSetBuffering stderr IO.LineBuffering
           let protocol = Peer.wormholeSpakeProtocol (Messages.AppID appID)
-          -- Receive their SPAKE2 material
-          theirPake <- readFromHandle stdout
-          let (Right inbound) = Peer.decodeElement protocol (Messages.body theirPake)
-          -- Send our SPAKE2 material
-          exchange <- Spake2.startSpake2 protocol password'
-          let outbound = Spake2.computeOutboundMessage exchange
-          sendToHandle stdin Messages.MailboxMessage
-            { Messages.phase = Messages.PakePhase
-            , Messages.side = Messages.Side ourSide
-            , Messages.body = Peer.encodeElement protocol outbound
-            , Messages.messageID = Nothing
-            }
-          -- Calculate the shared session key
-          let keyMaterial = Spake2.generateKeyMaterial exchange inbound
-          let sessionKey = Peer.SessionKey (Spake2.createSessionKey protocol inbound outbound keyMaterial password')
+          Right sessionKey <- Peer.SessionKey <<$>> Spake2.spake2Exchange protocol password' (send stdin ourSide) (receive stdout)
           -- Receive their versions message
           theirVersions <- readFromHandle stdout
           -- Send our versions message
@@ -122,6 +101,19 @@ tests = testSpec "Integration" $
           let Right plaintext = Peer.decrypt theirKey ciphertext
           let Right versions = Aeson.eitherDecode (toS plaintext)
           versions `shouldBe` Peer.Versions
+          where
+            send stdin ourSide pakeBytes = do
+              let body = Peer.spakeBytesToMessageBody pakeBytes
+              sendToHandle stdin Messages.MailboxMessage
+                { Messages.phase = Messages.PakePhase
+                , Messages.side = Messages.Side ourSide
+                , Messages.body = body
+                , Messages.messageID = Nothing
+                }
+            receive stdout = do
+              theirMessage <- readFromHandle stdout
+              Messages.phase theirMessage `shouldBe` Messages.PakePhase
+              pure . Peer.messageBodyToSpakeBytes . Messages.body $ theirMessage
 
 
 readFromHandle :: HasCallStack => Handle -> IO Messages.MailboxMessage
