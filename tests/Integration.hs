@@ -7,13 +7,16 @@
 -- * if magic-wormhole is not present, these tests will pass
 module Integration (tests) where
 
-import Protolude hiding (stdin, stdout)
+import Protolude hiding (phase, stdin, stdout)
 
+import qualified Crypto.Saltine.Class as Saltine
 import qualified Data.Aeson as Aeson
 import Data.ByteArray.Encoding (convertFromBase, convertToBase, Base(Base16))
 import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Char8 as Char8
 import Data.String (String)
+import qualified Hedgehog.Gen as Gen
+import qualified Hedgehog.Range as Range
 import qualified System.IO as IO
 import qualified System.Process as Process
 import Test.Tasty (TestTree)
@@ -43,6 +46,21 @@ tests = testSpec "Integration" $
           -- Calculate the shared key
           theirSpakeKey <- ByteString.hGetLine stdout
           theirSpakeKey `shouldBe` convertToBase Base16 sessionKey
+
+    it "Derives the same phase keys" $ do
+      fakeSpakeKey <- Gen.sample $ Gen.bytes (Range.singleton 32)
+      let side = "treebeard"
+      let phase = Messages.VersionPhase
+      let ourPhaseKey = Peer.deriveKey
+                        (Peer.SessionKey fakeSpakeKey)
+                        (Peer.phasePurpose (Messages.Side side) phase)
+      interactWithPython "tests/python/derive_phase_key.py"
+        [ "--spake-key=" <> toS (convertToBase Base16 fakeSpakeKey :: ByteString)
+        , "--side=" <> toS side
+        , "--phase=" <> toS (Aeson.encode phase)
+        ] $ \_stdin stdout -> do
+          theirPhaseKey <- ByteString.hGetLine stdout
+          theirPhaseKey `shouldBe` convertToBase Base16 (Saltine.encode ourPhaseKey)
 
     it "Works with our hacked-together Python implementation" $ do
       let appID = "jml.io/haskell-magic-wormhole-test"

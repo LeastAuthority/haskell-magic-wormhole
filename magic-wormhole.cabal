@@ -15,6 +15,7 @@ build-type:     Simple
 cabal-version:  >= 1.10
 
 data-files:
+    tests/python/derive_phase_key.py
     tests/python/spake2_exchange.py
     tests/python/version_exchange.py
 
@@ -80,6 +81,7 @@ test-suite tasty
     , magic-wormhole
     , memory
     , process
+    , saltine
     , spake2 >= 0.3
     , tasty
     , tasty-hedgehog
