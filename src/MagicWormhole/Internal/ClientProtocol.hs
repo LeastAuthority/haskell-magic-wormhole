@@ -6,7 +6,6 @@ module MagicWormhole.Internal.ClientProtocol
   , versionExchange
   , Error
   -- * Exported for testing
-  , wormholeSpakeProtocol
   , decrypt
   , encrypt
   , deriveKey

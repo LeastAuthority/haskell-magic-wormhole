@@ -85,6 +85,7 @@ test-suite tasty
     , process
     , saltine
     , spake2 >= 0.3
+    , stm
     , tasty
     , tasty-hedgehog
     , tasty-hspec
