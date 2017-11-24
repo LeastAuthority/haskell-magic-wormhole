@@ -11,7 +11,6 @@ import qualified Options.Applicative as Opt
 import qualified Crypto.Spake2 as Spake2
 import qualified MagicWormhole.Internal.ClientProtocol as ClientProtocol
 import qualified MagicWormhole.Internal.Messages as Messages
-import qualified MagicWormhole.Internal.Peer as Peer
 import qualified MagicWormhole.Internal.Rendezvous as Rendezvous
 import MagicWormhole.Internal.WebSockets (WebSocketEndpoint(..), parseWebSocketEndpoint)
 
@@ -63,8 +62,7 @@ app command session = do
     print command
     nameplate <- ExceptT $ first RendezvousError <$> Rendezvous.allocate session
     mailbox <- ExceptT $ first RendezvousError <$> Rendezvous.claim session nameplate
-    liftIO $ Rendezvous.open session mailbox  -- XXX: We should run `close` in the case of exceptions?
-    let peer = Peer.Connection session
+    peer <- liftIO $ Rendezvous.open session mailbox  -- XXX: We should run `close` in the case of exceptions?
     let (Messages.Nameplate n) = nameplate
     key <- ExceptT $ first PeerError <$> ClientProtocol.pakeExchange peer (Spake2.makePassword (toS n <> "-potato"))
     version <- ExceptT $ first PeerError <$> ClientProtocol.versionExchange peer key
