@@ -17,14 +17,10 @@ module MagicWormhole.Internal.Rendezvous
   , release
   , open
   , close
-  , add
-  , readFromMailbox
     -- * Running a Rendezvous client
   , runClient
   , Session
   , Error
-  , sessionAppID
-  , sessionSide
   ) where
 
 import Protolude hiding (list, phase)
