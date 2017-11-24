@@ -5,7 +5,6 @@ module MagicWormhole.Internal.ClientProtocol
   ( pakeExchange
   , versionExchange
   , Error
-  , PeerConnection(..)
   -- * Exported for testing
   , wormholeSpakeProtocol
   , decrypt
@@ -38,23 +37,7 @@ import qualified Data.ByteString as ByteString
 import Data.String (String)
 
 import qualified MagicWormhole.Internal.Messages as Messages
-import qualified MagicWormhole.Internal.Rendezvous as Rendezvous
-
-
--- | A connection to a peer via the Rendezvous server.
-newtype PeerConnection = PeerConnection { unPeerConnection :: Rendezvous.Session }
-
-appID :: PeerConnection -> Messages.AppID
-appID = Rendezvous.sessionAppID . unPeerConnection
-
-ourSide :: PeerConnection -> Messages.Side
-ourSide = Rendezvous.sessionSide . unPeerConnection
-
-send :: PeerConnection -> Messages.Phase -> Messages.Body -> IO ()
-send (PeerConnection session) = Rendezvous.add session
-
-receive :: PeerConnection -> STM Messages.MailboxMessage
-receive (PeerConnection session) = Rendezvous.readFromMailbox session
+import qualified MagicWormhole.Internal.Peer as Peer
 
 
 -- | The version of the SPAKE2 protocol used by Magic Wormhole.
@@ -105,23 +88,23 @@ wormholeSpakeProtocol (Messages.AppID appID') =
 newtype SessionKey = SessionKey ByteString
 
 -- | Exchange SPAKE2 keys with a Magic Wormhole peer.
-pakeExchange :: PeerConnection -> Spake2.Password -> IO (Either Error SessionKey)
+pakeExchange :: Peer.Connection -> Spake2.Password -> IO (Either Error SessionKey)
 pakeExchange connection password = do
-  let protocol = wormholeSpakeProtocol (appID connection)
+  let protocol = wormholeSpakeProtocol (Peer.appID connection)
   bimap ProtocolError SessionKey <$> Spake2.spake2Exchange protocol password sendPakeMessage (atomically receivePakeMessage)
   where
-    sendPakeMessage = send connection Messages.PakePhase . spakeBytesToMessageBody
+    sendPakeMessage = Peer.send connection Messages.PakePhase . spakeBytesToMessageBody
     receivePakeMessage  = do
       -- XXX: This is kind of a fun approach, but it means that everyone else
       -- has to promise that they *don't* consume pake messages.
-      msg <- receive connection
+      msg <- Peer.receive connection
       unless (Messages.phase msg == Messages.PakePhase) retry
       pure $ messageBodyToSpakeBytes (Messages.body msg)
 
 -- | Exchange version information with a Magic Wormhole peer.
 --
 -- Obtain the 'SessionKey' from 'pakeExchange'.
-versionExchange :: PeerConnection -> SessionKey -> IO (Either Error Versions)
+versionExchange :: Peer.Connection -> SessionKey -> IO (Either Error Versions)
 versionExchange connection key = do
   (_, theirVersions) <- concurrently sendVersion receiveVersion
   pure $ case theirVersions of
@@ -158,16 +141,16 @@ instance FromJSON Versions where
   parseJSON unknown = typeMismatch "Versions" unknown
 
 
-sendEncrypted :: PeerConnection -> SessionKey -> Messages.Phase -> PlainText -> IO ()
+sendEncrypted :: Peer.Connection -> SessionKey -> Messages.Phase -> PlainText -> IO ()
 sendEncrypted connection key phase plaintext = do
   ciphertext <- encrypt derivedKey plaintext
-  send connection phase (Messages.Body ciphertext)
+  Peer.send connection phase (Messages.Body ciphertext)
   where
-    derivedKey = deriveKey key (phasePurpose (ourSide connection) phase)
+    derivedKey = deriveKey key (phasePurpose (Peer.ourSide connection) phase)
 
-receiveEncrypted :: PeerConnection -> SessionKey -> IO (Either Error PlainText)
+receiveEncrypted :: Peer.Connection -> SessionKey -> IO (Either Error PlainText)
 receiveEncrypted connection key = do
-  message <- atomically $ receive connection
+  message <- atomically $ Peer.receive connection
   let Messages.Body ciphertext = Messages.body message
   pure $ decrypt (derivedKey message) ciphertext
   where
