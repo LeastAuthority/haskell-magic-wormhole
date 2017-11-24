@@ -1,7 +1,7 @@
 -- | The peer-to-peer aspects of the Magic Wormhole protocol.
 --
 -- Described as the "client" protocol in the Magic Wormhole documentation.
-module MagicWormhole.Internal.Peer
+module MagicWormhole.Internal.ClientProtocol
   ( pakeExchange
   , versionExchange
   , Error

@@ -9,8 +9,8 @@ import Protolude
 import qualified Options.Applicative as Opt
 
 import qualified Crypto.Spake2 as Spake2
+import qualified MagicWormhole.Internal.ClientProtocol as ClientProtocol
 import qualified MagicWormhole.Internal.Messages as Messages
-import qualified MagicWormhole.Internal.Peer as Peer
 import qualified MagicWormhole.Internal.Rendezvous as Rendezvous
 import MagicWormhole.Internal.WebSockets (WebSocketEndpoint(..), parseWebSocketEndpoint)
 
@@ -51,7 +51,7 @@ makeOptions :: Text -> Opt.Parser a -> Opt.ParserInfo a
 makeOptions headerText parser = Opt.info (Opt.helper <*> parser) (Opt.fullDesc <> Opt.header (toS headerText))
 
 data Error
-  = PeerError Peer.Error
+  = PeerError ClientProtocol.Error
   | RendezvousError Rendezvous.Error
   deriving (Eq, Show)
 
@@ -63,10 +63,10 @@ app command session = do
     nameplate <- ExceptT $ first RendezvousError <$> Rendezvous.allocate session
     mailbox <- ExceptT $ first RendezvousError <$> Rendezvous.claim session nameplate
     liftIO $ Rendezvous.open session mailbox  -- XXX: We should run `close` in the case of exceptions?
-    let peer = Peer.PeerConnection session
+    let peer = ClientProtocol.PeerConnection session
     let (Messages.Nameplate n) = nameplate
-    key <- ExceptT $ first PeerError <$> Peer.pakeExchange peer (Spake2.makePassword (toS n <> "-potato"))
-    version <- ExceptT $ first PeerError <$> Peer.versionExchange peer key
+    key <- ExceptT $ first PeerError <$> ClientProtocol.pakeExchange peer (Spake2.makePassword (toS n <> "-potato"))
+    version <- ExceptT $ first PeerError <$> ClientProtocol.versionExchange peer key
     print version
     ExceptT $ first RendezvousError <$> Rendezvous.close session (Just mailbox) (Just Messages.Happy)
   case result of

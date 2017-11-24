@@ -46,8 +46,8 @@ library
     , unordered-containers
     , websockets
   exposed-modules:
+      MagicWormhole.Internal.ClientProtocol
       MagicWormhole.Internal.Messages
-      MagicWormhole.Internal.Peer
       MagicWormhole.Internal.Rendezvous
       MagicWormhole.Internal.WebSockets
   default-language: Haskell2010
@@ -88,9 +88,9 @@ test-suite tasty
     , tasty-hedgehog
     , tasty-hspec
   other-modules:
+      ClientProtocol
       Generator
       Integration
       Messages
-      Peer
       WebSockets
   default-language: Haskell2010
