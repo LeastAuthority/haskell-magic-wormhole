@@ -40,12 +40,14 @@ library
     , memory
     , network
     , network-uri
+    , pqueue
     , saltine
     , spake2 >= 0.4
     , stm
     , unordered-containers
     , websockets
   exposed-modules:
+      MagicWormhole.Internal.ApplicationProtocol
       MagicWormhole.Internal.ClientProtocol
       MagicWormhole.Internal.Messages
       MagicWormhole.Internal.Peer
