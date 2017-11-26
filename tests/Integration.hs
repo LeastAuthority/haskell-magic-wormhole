@@ -31,6 +31,7 @@ import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 import qualified Crypto.Spake2 as Spake2
 import qualified MagicWormhole.Internal.ClientProtocol as ClientProtocol
 import qualified MagicWormhole.Internal.Messages as Messages
+import qualified MagicWormhole.Internal.Pake as Pake
 import qualified MagicWormhole.Internal.Peer as Peer
 
 import qualified Paths_magic_wormhole
@@ -49,8 +50,8 @@ tests = testSpec "Integration" $ do
         , "--code=" <> toS password
         , "--side=" <> theirSide
         ] $ \stdin stdout -> do
-          ClientProtocol.SessionKey sessionKey <- withConnection (Messages.AppID appID) (Messages.Side ourSide) stdin stdout $ \conn -> do
-            Right sessionKey <- ClientProtocol.pakeExchange conn password'
+          Pake.SessionKey sessionKey <- withConnection (Messages.AppID appID) (Messages.Side ourSide) stdin stdout $ \conn -> do
+            Right sessionKey <- Pake.pakeExchange conn password'
             pure sessionKey
           -- Calculate the shared key
           theirSpakeKey <- ByteString.hGetLine stdout
@@ -61,7 +62,7 @@ tests = testSpec "Integration" $ do
       let side = "treebeard"
       let phase = Messages.VersionPhase
       let ourPhaseKey = ClientProtocol.deriveKey
-                        (ClientProtocol.SessionKey fakeSpakeKey)
+                        (Pake.SessionKey fakeSpakeKey)
                         (ClientProtocol.phasePurpose (Messages.Side side) phase)
       interactWithPython "tests/python/derive_phase_key.py"
         [ "--spake-key=" <> toS (convertToBase Base16 fakeSpakeKey :: ByteString)
@@ -83,7 +84,7 @@ tests = testSpec "Integration" $ do
         , "--code=" <> toS password
         ] $ \stdin stdout -> do
           versions <- withConnection (Messages.AppID appID) (Messages.Side ourSide) stdin stdout $ \conn -> do
-            Right sessionKey <- ClientProtocol.pakeExchange conn password'
+            Right sessionKey <- Pake.pakeExchange conn password'
             Right versions <- ClientProtocol.versionExchange conn sessionKey
             pure versions
           versions `shouldBe` ClientProtocol.Versions

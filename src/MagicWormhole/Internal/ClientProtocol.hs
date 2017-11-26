@@ -3,8 +3,7 @@
 --
 -- Described as the "client" protocol in the Magic Wormhole documentation.
 module MagicWormhole.Internal.ClientProtocol
-  ( pakeExchange
-  , versionExchange
+  ( versionExchange
   , Error
   , sendEncrypted
   , receiveEncrypted
@@ -18,11 +17,8 @@ module MagicWormhole.Internal.ClientProtocol
   , decrypt
   , encrypt
   , deriveKey
-  , SessionKey(..) -- XXX: Figure out how to avoid exporting the constructors.
   , Versions(..)
   , phasePurpose
-  , spakeBytesToMessageBody
-  , messageBodyToSpakeBytes
   ) where
 
 import Protolude hiding (phase)
@@ -33,58 +29,23 @@ import Control.Concurrent.STM.TVar
   , newTVar
   , readTVar
   )
-import Control.Monad (fail)
 import Crypto.Hash (SHA256(..), hashWith)
 import qualified Crypto.KDF.HKDF as HKDF
 import qualified Crypto.Saltine.Internal.ByteSizes as ByteSizes
 import qualified Crypto.Saltine.Class as Saltine
 import qualified Crypto.Saltine.Core.SecretBox as SecretBox
 import qualified Crypto.Spake2 as Spake2
-import Crypto.Spake2.Group (Group(arbitraryElement))
-import Crypto.Spake2.Groups (Ed25519(..))
 import Data.Aeson (FromJSON, ToJSON, (.=), object, Value(..), (.:))
 import Data.Aeson.Types (typeMismatch)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteArray as ByteArray
-import Data.ByteArray.Encoding (convertToBase, convertFromBase, Base(Base16))
 import qualified Data.ByteString as ByteString
 import Data.String (String)
 
 import qualified MagicWormhole.Internal.Messages as Messages
+import qualified MagicWormhole.Internal.Pake as Pake
 import qualified MagicWormhole.Internal.Peer as Peer
 import qualified MagicWormhole.Internal.Sequential as Sequential
-
-
--- | The version of the SPAKE2 protocol used by Magic Wormhole.
-type Spake2Protocol = Spake2.Protocol Ed25519 SHA256
-
-newtype Spake2Message = Spake2Message { spake2Bytes :: ByteString } deriving (Eq, Show)
-
-instance ToJSON Spake2Message where
-  toJSON (Spake2Message msg) = object [ "pake_v1" .= toS @ByteString @Text (convertToBase Base16 msg) ]
-
-instance FromJSON Spake2Message where
-  parseJSON (Object msg) = do
-    hexKey <- toS @Text @ByteString <$> msg .: "pake_v1"
-    case convertFromBase Base16 hexKey of
-      Left err -> fail err
-      Right key -> pure $ Spake2Message key
-  parseJSON unknown = typeMismatch "Spake2Message" unknown
-
-spakeBytesToMessageBody :: ByteString -> Messages.Body
-spakeBytesToMessageBody = Messages.Body . toS . Aeson.encode . Spake2Message
-
-messageBodyToSpakeBytes :: Messages.Body -> Either Text ByteString
-messageBodyToSpakeBytes (Messages.Body bodyBytes) =
-  bimap toS spake2Bytes . Aeson.eitherDecode . toS $ bodyBytes
-
--- | Construct a SPAKE2 protocol compatible with Magic Wormhole.
-wormholeSpakeProtocol :: Messages.AppID -> Spake2Protocol
-wormholeSpakeProtocol (Messages.AppID appID') =
-  Spake2.makeSymmetricProtocol SHA256 Ed25519 blind sideID
-  where
-    blind = arbitraryElement Ed25519 ("symmetric" :: ByteString)
-    sideID = Spake2.SideID (toS appID')
 
 
 -- XXX: Lots of duplicated code sending JSON data. Either make a typeclass for
@@ -95,31 +56,10 @@ wormholeSpakeProtocol (Messages.AppID appID') =
 -- encodes as `ascii` rather than the expected `UTF-8`, so I need to be a bit
 -- more careful.
 
--- | SPAKE2 key used for the duration of a Magic Wormhole peer-to-peer connection.
---
--- Individual messages will be encrypted using 'encrypt' ('decrypt'), which
--- must be given a key that's /generated/ from this one (see 'deriveKey' and
--- 'derivePhaseKey').
-newtype SessionKey = SessionKey ByteString
-
--- | Exchange SPAKE2 keys with a Magic Wormhole peer.
-pakeExchange :: Peer.Connection -> Spake2.Password -> IO (Either Error SessionKey)
-pakeExchange conn password = do
-  let protocol = wormholeSpakeProtocol (Peer.appID conn)
-  bimap ProtocolError SessionKey <$> Spake2.spake2Exchange protocol password sendPakeMessage (atomically receivePakeMessage)
-  where
-    sendPakeMessage = Peer.send conn Messages.PakePhase . spakeBytesToMessageBody
-    receivePakeMessage  = do
-      -- XXX: This is kind of a fun approach, but it means that everyone else
-      -- has to promise that they *don't* consume pake messages.
-      msg <- Peer.receive conn
-      unless (Messages.phase msg == Messages.PakePhase) retry
-      pure $ messageBodyToSpakeBytes (Messages.body msg)
-
 -- | Exchange version information with a Magic Wormhole peer.
 --
 -- Obtain the 'SessionKey' from 'pakeExchange'.
-versionExchange :: Peer.Connection -> SessionKey -> IO (Either Error Versions)
+versionExchange :: Peer.Connection -> Pake.SessionKey -> IO (Either Error Versions)
 versionExchange conn key = do
   (_, theirVersions) <- concurrently sendVersion (atomically receiveVersion)
   pure $ case theirVersions of
@@ -139,7 +79,7 @@ versionExchange conn key = do
 -- Use this connection with 'withEncryptedConnection'.
 establishEncryption :: Peer.Connection -> Spake2.Password -> IO (Either Error EncryptedConnection)
 establishEncryption peer password = runExceptT $ do
-  key <- ExceptT $ pakeExchange peer password
+  key <- ExceptT $ first ProtocolError <$> Pake.pakeExchange peer password
   void $ ExceptT $ versionExchange peer key
   conn <- liftIO $ atomically $ newEncryptedConnection peer key
   pure conn
@@ -182,14 +122,14 @@ instance FromJSON Versions where
   parseJSON unknown = typeMismatch "Versions" unknown
 
 
-sendEncrypted :: Peer.Connection -> SessionKey -> Messages.Phase -> PlainText -> IO ()
+sendEncrypted :: Peer.Connection -> Pake.SessionKey -> Messages.Phase -> PlainText -> IO ()
 sendEncrypted conn key phase plaintext = do
   ciphertext <- encrypt derivedKey plaintext
   Peer.send conn phase (Messages.Body ciphertext)
   where
     derivedKey = deriveKey key (phasePurpose (Peer.ourSide conn) phase)
 
-receiveEncrypted :: Peer.Connection -> SessionKey -> STM (Either Error (Messages.Phase, PlainText))
+receiveEncrypted :: Peer.Connection -> Pake.SessionKey -> STM (Either Error (Messages.Phase, PlainText))
 receiveEncrypted conn key = do
   message <- Peer.receive conn
   let Messages.Body ciphertext = Messages.body message
@@ -204,8 +144,8 @@ receiveEncrypted conn key = do
 type Purpose = ByteString
 
 -- | Derive a one-off key from the SPAKE2 'SessionKey'. Use this key only once.
-deriveKey :: SessionKey -> Purpose -> SecretBox.Key
-deriveKey (SessionKey key) purpose =
+deriveKey :: Pake.SessionKey -> Purpose -> SecretBox.Key
+deriveKey (Pake.SessionKey key) purpose =
   fromMaybe (panic "Could not encode to SecretBox key") $ -- Impossible. We guarantee it's the right size.
     Saltine.decode (HKDF.expand (HKDF.extract salt key :: HKDF.PRK SHA256) purpose keySize)
   where
@@ -255,13 +195,13 @@ decrypt key ciphertext = do
 data EncryptedConnection
   = EncryptedConnection
   { connection :: Peer.Connection
-  , sharedKey :: SessionKey
+  , sharedKey :: Pake.SessionKey
   , inbound :: Sequential.Sequential Int (Messages.Phase, PlainText)
   , outbound :: TVar Int
   }
 
 -- | Construct a new encrypted connection.
-newEncryptedConnection :: Peer.Connection -> SessionKey -> STM EncryptedConnection
+newEncryptedConnection :: Peer.Connection -> Pake.SessionKey -> STM EncryptedConnection
 newEncryptedConnection conn sessionKey = EncryptedConnection conn sessionKey <$> Sequential.sequenceBy getAppRank firstPhase <*> newTVar firstPhase
   where
     getAppRank (phase, _) =
