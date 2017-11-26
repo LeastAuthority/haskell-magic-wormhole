@@ -1,6 +1,5 @@
 module MagicWormhole.Internal.Pake
   ( pakeExchange
-  , SessionKey(..)
   -- * Exported for testing
   , spakeBytesToMessageBody
   , messageBodyToSpakeBytes
@@ -21,18 +20,11 @@ import Data.ByteArray.Encoding (convertToBase, convertFromBase, Base(Base16))
 import qualified MagicWormhole.Internal.Messages as Messages
 import qualified MagicWormhole.Internal.Peer as Peer
 
--- | SPAKE2 key used for the duration of a Magic Wormhole peer-to-peer connection.
---
--- Individual messages will be encrypted using 'encrypt' ('decrypt'), which
--- must be given a key that's /generated/ from this one (see 'deriveKey' and
--- 'derivePhaseKey').
-newtype SessionKey = SessionKey ByteString
-
 -- | Exchange SPAKE2 keys with a Magic Wormhole peer.
-pakeExchange :: Peer.Connection -> Spake2.Password -> IO (Either (Spake2.MessageError Text) SessionKey)
+pakeExchange :: Peer.Connection -> Spake2.Password -> IO (Either (Spake2.MessageError Text) Peer.SessionKey)
 pakeExchange conn password = do
   let protocol = wormholeSpakeProtocol (Peer.appID conn)
-  second SessionKey <$> Spake2.spake2Exchange protocol password sendPakeMessage (atomically receivePakeMessage)
+  second Peer.SessionKey <$> Spake2.spake2Exchange protocol password sendPakeMessage (atomically receivePakeMessage)
   where
     sendPakeMessage = Peer.send conn Messages.PakePhase . spakeBytesToMessageBody
     receivePakeMessage  = do

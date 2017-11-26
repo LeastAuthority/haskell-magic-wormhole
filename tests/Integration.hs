@@ -29,10 +29,10 @@ import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
 import qualified Crypto.Spake2 as Spake2
-import qualified MagicWormhole.Internal.ClientProtocol as ClientProtocol
 import qualified MagicWormhole.Internal.Messages as Messages
 import qualified MagicWormhole.Internal.Pake as Pake
 import qualified MagicWormhole.Internal.Peer as Peer
+import qualified MagicWormhole.Internal.Versions as Versions
 
 import qualified Paths_magic_wormhole
 
@@ -50,7 +50,7 @@ tests = testSpec "Integration" $ do
         , "--code=" <> toS password
         , "--side=" <> theirSide
         ] $ \stdin stdout -> do
-          Pake.SessionKey sessionKey <- withConnection (Messages.AppID appID) (Messages.Side ourSide) stdin stdout $ \conn -> do
+          Peer.SessionKey sessionKey <- withConnection (Messages.AppID appID) (Messages.Side ourSide) stdin stdout $ \conn -> do
             Right sessionKey <- Pake.pakeExchange conn password'
             pure sessionKey
           -- Calculate the shared key
@@ -61,9 +61,9 @@ tests = testSpec "Integration" $ do
       fakeSpakeKey <- Gen.sample $ Gen.bytes (Range.singleton 32)
       let side = "treebeard"
       let phase = Messages.VersionPhase
-      let ourPhaseKey = ClientProtocol.deriveKey
-                        (Pake.SessionKey fakeSpakeKey)
-                        (ClientProtocol.phasePurpose (Messages.Side side) phase)
+      let ourPhaseKey = Peer.deriveKey
+                        (Peer.SessionKey fakeSpakeKey)
+                        (Peer.phasePurpose (Messages.Side side) phase)
       interactWithPython "tests/python/derive_phase_key.py"
         [ "--spake-key=" <> toS (convertToBase Base16 fakeSpakeKey :: ByteString)
         , "--side=" <> toS side
@@ -85,9 +85,9 @@ tests = testSpec "Integration" $ do
         ] $ \stdin stdout -> do
           versions <- withConnection (Messages.AppID appID) (Messages.Side ourSide) stdin stdout $ \conn -> do
             Right sessionKey <- Pake.pakeExchange conn password'
-            Right versions <- ClientProtocol.versionExchange conn sessionKey
+            Right versions <- Versions.versionExchange conn sessionKey
             pure versions
-          versions `shouldBe` ClientProtocol.Versions
+          versions `shouldBe` Versions.Versions
 
   describe "NaCL interoperability" $
     it "Swaps messages with Python" $ do
@@ -98,13 +98,13 @@ tests = testSpec "Integration" $ do
         , "--nonce=" <> toS (convertToBase Base16 (Saltine.encode nonce) :: ByteString)
         ] $ \stdin stdout -> do
           let message = "Hello world!"
-          encryptedByUs <- ClientProtocol.encrypt key message
+          encryptedByUs <- Peer.encrypt key message
           Char8.hPutStrLn stdin (convertToBase Base16 encryptedByUs :: ByteString)
           decryptedByPython <- ByteString.hGetLine stdout
           decryptedByPython `shouldBe` message
           encryptedByPython <- ByteString.hGetLine stdout
           let Right encryptedBytes = convertFromBase Base16 encryptedByPython
-          let Right decryptedByUs = ClientProtocol.decrypt key encryptedBytes
+          let Right decryptedByUs = Peer.decrypt key encryptedBytes
           decryptedByUs `shouldBe` message
 
 
