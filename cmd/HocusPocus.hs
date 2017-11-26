@@ -10,7 +10,6 @@ import qualified Options.Applicative as Opt
 
 import qualified Crypto.Spake2 as Spake2
 import qualified Data.Aeson as Aeson
-import qualified MagicWormhole.Internal.ApplicationProtocol as ApplicationProtocol
 import qualified MagicWormhole.Internal.ClientProtocol as ClientProtocol
 import qualified MagicWormhole.Internal.FileTransfer as FileTransfer
 import qualified MagicWormhole.Internal.Messages as Messages
@@ -70,9 +69,9 @@ app command session = do
     key <- ExceptT $ first PeerError <$> ClientProtocol.pakeExchange peer (Spake2.makePassword (toS n <> "-potato"))
     version <- ExceptT $ first PeerError <$> ClientProtocol.versionExchange peer key
     print version
-    ExceptT $ first PeerError <$> ApplicationProtocol.withEncryptedConnection peer key (\conn -> do
+    ExceptT $ first PeerError <$> ClientProtocol.withEncryptedConnection peer key (\conn -> do
       let offer = FileTransfer.Message "Brave new world that has such offers in it"
-      ApplicationProtocol.sendMessage conn (toS (Aeson.encode offer)))
+      ClientProtocol.sendMessage conn (toS (Aeson.encode offer)))
     ExceptT $ first RendezvousError <$> Rendezvous.close session (Just mailbox) (Just Messages.Happy)
   case result of
     Left err -> die $ "Failed to " <> show command <> ": " <> show err
