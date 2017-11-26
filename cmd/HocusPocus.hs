@@ -70,9 +70,9 @@ app command session = do
     key <- ExceptT $ first PeerError <$> ClientProtocol.pakeExchange peer (Spake2.makePassword (toS n <> "-potato"))
     version <- ExceptT $ first PeerError <$> ClientProtocol.versionExchange peer key
     print version
-    ExceptT $ first PeerError <$> ApplicationProtocol.withSession peer key (\appSession -> do
+    ExceptT $ first PeerError <$> ApplicationProtocol.withEncryptedConnection peer key (\conn -> do
       let offer = FileTransfer.Message "Brave new world that has such offers in it"
-      ApplicationProtocol.sendMessage appSession (toS (Aeson.encode offer)))
+      ApplicationProtocol.sendMessage conn (toS (Aeson.encode offer)))
     ExceptT $ first RendezvousError <$> Rendezvous.close session (Just mailbox) (Just Messages.Happy)
   case result of
     Left err -> die $ "Failed to " <> show command <> ": " <> show err
