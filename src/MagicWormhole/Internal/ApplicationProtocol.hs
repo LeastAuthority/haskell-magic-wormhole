@@ -61,13 +61,19 @@ withSession conn sessionKey action = do
 
 -- | Construct a new session.
 newSession :: Peer.Connection -> ClientProtocol.SessionKey -> STM Session
-newSession conn sessionKey = Session conn sessionKey <$> sequenceBy getAppRank 1 <*> newTVar 1
+newSession conn sessionKey = Session conn sessionKey <$> sequenceBy getAppRank firstPhase <*> newTVar firstPhase
   where
     getAppRank (phase, _) =
       case phase of
         Messages.PakePhase -> panic "Did not expect PakePhase. Expected application phase."
         Messages.VersionPhase -> panic "Did not expect VersionPhase. Expected application phase."
         (Messages.ApplicationPhase n) -> n
+
+    -- | The rank of the first phase we expect to send, and the first phase we
+    -- expect to receive. It is critically important that this number is
+    -- agreed on between peers, otherwise, a peer will wait forever for, say,
+    -- message 0, which the other side has cheerily sent as message 1.
+    firstPhase = 0
 
 -- | Run an action inside a session.
 --
