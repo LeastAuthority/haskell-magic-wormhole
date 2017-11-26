@@ -53,30 +53,22 @@ makeOptions :: Text -> Opt.Parser a -> Opt.ParserInfo a
 makeOptions headerText parser = Opt.info (Opt.helper <*> parser) (Opt.fullDesc <> Opt.header (toS headerText))
 
 -- | Execute 'Command' against a Wormhole Rendezvous server.
-app :: Command -> Rendezvous.Session -> IO (Either Peer.Error ())
+app :: Command -> Rendezvous.Session -> IO ()
 app command session = do
   print command
   nameplate <- Rendezvous.allocate session
   mailbox <- Rendezvous.claim session nameplate
   peer <- Rendezvous.open session mailbox  -- XXX: We should run `close` in the case of exceptions?
   let (Messages.Nameplate n) = nameplate
-  result <- Peer.withEncryptedConnection peer (Spake2.makePassword (toS n <> "-potato"))
+  Peer.withEncryptedConnection peer (Spake2.makePassword (toS n <> "-potato"))
     (\conn -> do
         let offer = FileTransfer.Message "Brave new world that has such offers in it"
         Peer.sendMessage conn (toS (Aeson.encode offer)))
-  case result of
-    Left _ -> do
-      Rendezvous.close session (Just mailbox) (Just Messages.Errory)
-      pure result
-    Right result' -> do
-      Rendezvous.close session (Just mailbox) (Just Messages.Happy)
-      pure (Right result')
 
 main :: IO ()
 main = do
   options <- Opt.execParser (makeOptions "hocus-pocus - summon and traverse magic wormholes" optionsParser)
-  result <- Rendezvous.runClient (rendezvousEndpoint options) appID side (app (cmd options))
-  either (die . show) pure result
+  Rendezvous.runClient (rendezvousEndpoint options) appID side (app (cmd options))
   where
     appID = Messages.AppID "jml.io/hocus-pocus"
     side = Messages.Side "treebeard"

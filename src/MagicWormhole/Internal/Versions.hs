@@ -27,20 +27,16 @@ import qualified MagicWormhole.Internal.Messages as Messages
 -- | Exchange version information with a Magic Wormhole peer.
 --
 -- Obtain the 'SessionKey' from 'pakeExchange'.
-versionExchange :: ClientProtocol.Connection -> ClientProtocol.SessionKey -> IO (Either Error Versions)
+versionExchange :: ClientProtocol.Connection -> ClientProtocol.SessionKey -> IO Versions
 versionExchange conn key = do
   (_, theirVersions) <- concurrently sendVersion (atomically receiveVersion)
-  pure $ case theirVersions of
-    Left err -> Left err
-    Right theirs
-      | theirs /= Versions -> Left VersionMismatch
-      | otherwise -> Right Versions
+  if theirVersions /= Versions then throwIO VersionMismatch else pure Versions
   where
     sendVersion = ClientProtocol.sendEncrypted conn key Messages.VersionPhase (toS (Aeson.encode Versions))
-    receiveVersion = runExceptT $ do
-      (phase, plaintext) <- ExceptT $ first CryptoError <$> ClientProtocol.receiveEncrypted conn key
-      lift $ unless (phase == Messages.VersionPhase) retry
-      ExceptT $ pure $ first ParseError (Aeson.eitherDecode (toS plaintext))
+    receiveVersion = do
+      (phase, plaintext) <- ClientProtocol.receiveEncrypted conn key
+      unless (phase == Messages.VersionPhase) retry
+      either (throwSTM . ParseError) pure $ Aeson.eitherDecode (toS plaintext)
 
 data Versions = Versions deriving (Eq, Show)
 
@@ -58,5 +54,6 @@ instance FromJSON Versions where
 data Error
   = ParseError String
   | VersionMismatch
-  | CryptoError ClientProtocol.Error
-  deriving (Eq, Show)
+  deriving (Eq, Show, Typeable)
+
+instance Exception Error

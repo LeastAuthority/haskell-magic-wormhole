@@ -42,10 +42,10 @@ import qualified MagicWormhole.Internal.Versions as Versions
 -- | Establish an encrypted connection between peers.
 --
 -- Use this connection with 'withEncryptedConnection'.
-establishEncryption :: ClientProtocol.Connection -> Spake2.Password -> IO (Either Error EncryptedConnection)
-establishEncryption peer password = runExceptT $ do
-  key <- ExceptT $ first ProtocolError <$> Pake.pakeExchange peer password
-  void $ ExceptT $ first VersionsError <$> Versions.versionExchange peer key
+establishEncryption :: ClientProtocol.Connection -> Spake2.Password -> IO EncryptedConnection
+establishEncryption peer password = do
+  key <- Pake.pakeExchange peer password
+  void $ Versions.versionExchange peer key
   conn <- liftIO $ atomically $ newEncryptedConnection peer key
   pure conn
 
@@ -59,10 +59,10 @@ withEncryptedConnection
   :: ClientProtocol.Connection  -- ^ Underlying to a peer. Get this with 'Rendezvous.open'.
   -> Spake2.Password  -- ^ The shared password that is the basis of the encryption. Construct with 'Spake2.makePassword'.
   -> (EncryptedConnection -> IO a)  -- ^ Action to perform with the encrypted connection.
-  -> IO (Either Error a)  -- ^ The result of the action, or some sort of protocol-level error.
-withEncryptedConnection peer password action = runExceptT $ do
-  conn <- ExceptT $ establishEncryption peer password
-  ExceptT $ first CryptoError <$> runEncryptedConnection conn (action conn)
+  -> IO a  -- ^ The result of the action
+withEncryptedConnection peer password action = do
+  conn <- establishEncryption peer password
+  runEncryptedConnection conn (action conn)
 
 
 -- | A Magic Wormhole peer-to-peer application session.
@@ -111,21 +111,17 @@ newEncryptedConnection conn sessionKey = EncryptedConnection conn sessionKey <$>
 runEncryptedConnection
   :: EncryptedConnection
   -> IO a
-  -> IO (Either ClientProtocol.Error a)
+  -> IO a
 runEncryptedConnection conn action = do
   result <- race readLoop action
   pure $ case result of
-           Left (Left readErr) -> Left readErr
-           Left (Right _) -> panic "Cannot happen"
-           Right r -> Right r
+           Left _ -> panic "Cannot happen"
+           Right r -> r
   where
-    readLoop = do
+    readLoop = forever $ do
       msg <- atomically $ ClientProtocol.receiveEncrypted (connection conn) (sharedKey conn)
-      case msg of
-        Left err -> pure $ Left err
-        Right msg' -> do
-          atomically $ Sequential.insert (inbound conn) msg'
-          readLoop
+      atomically $ Sequential.insert (inbound conn) msg
+
 
 -- | Send an encrypted message to the peer.
 --

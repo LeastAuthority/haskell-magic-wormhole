@@ -50,9 +50,8 @@ tests = testSpec "Integration" $ do
         , "--code=" <> toS password
         , "--side=" <> theirSide
         ] $ \stdin stdout -> do
-          ClientProtocol.SessionKey sessionKey <- withConnection (Messages.AppID appID) (Messages.Side ourSide) stdin stdout $ \conn -> do
-            Right sessionKey <- Pake.pakeExchange conn password'
-            pure sessionKey
+          ClientProtocol.SessionKey sessionKey <- withConnection (Messages.AppID appID) (Messages.Side ourSide) stdin stdout $ \conn ->
+            Pake.pakeExchange conn password'
           -- Calculate the shared key
           theirSpakeKey <- ByteString.hGetLine stdout
           theirSpakeKey `shouldBe` convertToBase Base16 sessionKey
@@ -84,9 +83,8 @@ tests = testSpec "Integration" $ do
         , "--code=" <> toS password
         ] $ \stdin stdout -> do
           versions <- withConnection (Messages.AppID appID) (Messages.Side ourSide) stdin stdout $ \conn -> do
-            Right sessionKey <- Pake.pakeExchange conn password'
-            Right versions <- Versions.versionExchange conn sessionKey
-            pure versions
+            sessionKey <- Pake.pakeExchange conn password'
+            Versions.versionExchange conn sessionKey
           versions `shouldBe` Versions.Versions
 
   describe "NaCL interoperability" $

@@ -56,11 +56,12 @@ sendEncrypted conn key phase plaintext = do
   send conn phase encryptedBody
 
 -- | Pull a message from the peer and decrypt it. If the message fails to
--- decrypt, the next attempt to 'receiveEncrypted' will get the next message.
-receiveEncrypted :: Connection -> SessionKey -> STM (Either Error (Messages.Phase, PlainText))
+-- decrypt, an exception will be thrown, aborting the transaction and leaving
+-- the message on the queue.
+receiveEncrypted :: Connection -> SessionKey -> STM (Messages.Phase, PlainText)
 receiveEncrypted conn key = do
   message <- receive conn
-  pure $ decryptMessage key message
+  either throwSTM pure $ decryptMessage key message
 
 -- | Encrypt a mailbox message, deriving the key from the phase.
 encryptMessage :: Connection -> SessionKey -> Messages.Phase -> PlainText -> IO Messages.Body
@@ -123,3 +124,5 @@ data Error
   = CouldNotDecrypt ByteString
   | InvalidNonce ByteString
   deriving (Eq, Show, Typeable)
+
+instance Exception Error
