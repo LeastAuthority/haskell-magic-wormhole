@@ -9,11 +9,11 @@ import qualified Hedgehog.Range as Range
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.Hedgehog (testProperty)
 
-import qualified MagicWormhole.Internal.Peer as ClientProtocol
+import qualified MagicWormhole.Internal.ClientProtocol as ClientProtocol
 
 
 tests :: IO TestTree
-tests = pure $ testGroup "Peer"
+tests = pure $ testGroup "ClientProtocol"
   [ testProperty "SecretBox encryption roundtrips" $ property $ do
       purpose <- forAll $ Gen.bytes (Range.linear 0 10)
       secret <- forAll $ Gen.bytes (Range.linear 0 10)

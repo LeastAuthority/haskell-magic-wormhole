@@ -49,8 +49,8 @@ import Data.String (String)
 import qualified Network.Socket as Socket
 import qualified Network.WebSockets as WS
 
+import qualified MagicWormhole.Internal.ClientProtocol as ClientProtocol
 import qualified MagicWormhole.Internal.Messages as Messages
-import qualified MagicWormhole.Internal.Peer as Peer
 import MagicWormhole.Internal.WebSockets (WebSocketEndpoint(..))
 
 -- TODO: A big problem throughout this code is that exceptions will get raised
@@ -240,14 +240,14 @@ release session nameplate' = do
 -- unexpected place.
 --
 -- See https://github.com/warner/magic-wormhole/issues/261#issuecomment-343192449
-open :: HasCallStack => Session -> Messages.Mailbox -> IO Peer.Connection
+open :: HasCallStack => Session -> Messages.Mailbox -> IO ClientProtocol.Connection
 open session mailbox = do
   send session (Messages.Open mailbox)
-  pure Peer.Connection { Peer.appID = sessionAppID session
-                       , Peer.ourSide = sessionSide session
-                       , Peer.send = add session
-                       , Peer.receive = readFromMailbox session
-                       }
+  pure ClientProtocol.Connection { ClientProtocol.appID = sessionAppID session
+                                 , ClientProtocol.ourSide = sessionSide session
+                                 , ClientProtocol.send = add session
+                                 , ClientProtocol.receive = readFromMailbox session
+                                 }
 
 -- | Close a mailbox on the server.
 close :: HasCallStack => Session -> Maybe Messages.Mailbox -> Maybe Messages.Mood -> IO (Either Error ())
