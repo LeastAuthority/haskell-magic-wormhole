@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections #-}
 -- | The peer-to-peer aspects of the Magic Wormhole protocol.
 --
 -- Described as the "client" protocol in the Magic Wormhole documentation.
@@ -5,6 +6,9 @@ module MagicWormhole.Internal.ClientProtocol
   ( pakeExchange
   , versionExchange
   , Error
+  , sendEncrypted
+  , receiveEncrypted
+  , PlainText
   -- * Exported for testing
   , decrypt
   , encrypt
@@ -105,7 +109,7 @@ pakeExchange connection password = do
 -- Obtain the 'SessionKey' from 'pakeExchange'.
 versionExchange :: Peer.Connection -> SessionKey -> IO (Either Error Versions)
 versionExchange connection key = do
-  (_, theirVersions) <- concurrently sendVersion receiveVersion
+  (_, theirVersions) <- concurrently sendVersion (atomically receiveVersion)
   pure $ case theirVersions of
     Left err -> Left err
     Right theirs
@@ -114,7 +118,8 @@ versionExchange connection key = do
   where
     sendVersion = sendEncrypted connection key Messages.VersionPhase (toS (Aeson.encode Versions))
     receiveVersion = runExceptT $ do
-      plaintext <- ExceptT $ receiveEncrypted connection key
+      (phase, plaintext) <- ExceptT $ receiveEncrypted connection key
+      lift $ unless (phase == Messages.VersionPhase) retry
       ExceptT $ pure $ first ParseError (Aeson.eitherDecode (toS plaintext))
 
 -- NOTE: Versions
@@ -147,11 +152,11 @@ sendEncrypted connection key phase plaintext = do
   where
     derivedKey = deriveKey key (phasePurpose (Peer.ourSide connection) phase)
 
-receiveEncrypted :: Peer.Connection -> SessionKey -> IO (Either Error PlainText)
+receiveEncrypted :: Peer.Connection -> SessionKey -> STM (Either Error (Messages.Phase, PlainText))
 receiveEncrypted connection key = do
-  message <- atomically $ Peer.receive connection
+  message <- Peer.receive connection
   let Messages.Body ciphertext = Messages.body message
-  pure $ decrypt (derivedKey message) ciphertext
+  pure $ (Messages.phase message,) <$> decrypt (derivedKey message) ciphertext
   where
     derivedKey msg = deriveKey key (phasePurpose (Messages.side msg) (Messages.phase msg))
 
