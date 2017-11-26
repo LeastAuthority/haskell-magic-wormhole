@@ -52,18 +52,21 @@ newtype SessionKey = SessionKey ByteString
 
 sendEncrypted :: Connection -> SessionKey -> Messages.Phase -> PlainText -> IO ()
 sendEncrypted conn key phase plaintext = do
-  ciphertext <- encrypt derivedKey plaintext
-  send conn phase (Messages.Body ciphertext)
-  where
-    derivedKey = deriveKey key (phasePurpose (ourSide conn) phase)
+  encryptedBody <- encryptMessage conn key phase plaintext
+  send conn phase encryptedBody
 
+-- | Pull a message from the peer and decrypt it. If the message fails to
+-- decrypt, the next attempt to 'receiveEncrypted' will get the next message.
 receiveEncrypted :: Connection -> SessionKey -> STM (Either Error (Messages.Phase, PlainText))
 receiveEncrypted conn key = do
   message <- receive conn
-  let Messages.Body ciphertext = Messages.body message
-  pure $ (Messages.phase message,) <$> decrypt (derivedKey message) ciphertext
+  pure $ decryptMessage key message
+
+-- | Encrypt a mailbox message, deriving the key from the phase.
+encryptMessage :: Connection -> SessionKey -> Messages.Phase -> PlainText -> IO Messages.Body
+encryptMessage conn key phase plaintext = Messages.Body <$> encrypt derivedKey plaintext
   where
-    derivedKey msg = deriveKey key (phasePurpose (Messages.side msg) (Messages.phase msg))
+    derivedKey = deriveKey key (phasePurpose (ourSide conn) phase)
 
 -- | Encrypt a message using 'SecretBox'. Get the key from 'deriveKey'.
 -- Decrypt with 'decrypt'.
@@ -72,6 +75,14 @@ encrypt key message = do
   nonce <- SecretBox.newNonce
   let ciphertext = SecretBox.secretbox key nonce message
   pure $ Saltine.encode nonce <> ciphertext
+
+-- | Decrypt a 'MailboxMessage' using 'SecretBox'. Derives the key from the phase.
+decryptMessage :: SessionKey -> Messages.MailboxMessage -> Either Error (Messages.Phase, PlainText)
+decryptMessage key message =
+  let Messages.Body ciphertext = Messages.body message
+  in (Messages.phase message,) <$> decrypt (derivedKey message) ciphertext
+  where
+    derivedKey msg = deriveKey key (phasePurpose (Messages.side msg) (Messages.phase msg))
 
 -- | Decrypt a message using 'SecretBox'. Get the key from 'deriveKey'.
 -- Encrypted using 'encrypt'.
@@ -111,4 +122,4 @@ phasePurpose (Messages.Side side) phase = "wormhole:phase:" <> sideHashDigest <>
 data Error
   = CouldNotDecrypt ByteString
   | InvalidNonce ByteString
-  deriving (Eq, Show)
+  deriving (Eq, Show, Typeable)
