@@ -54,6 +54,7 @@ library
       MagicWormhole.Internal.Peer
       MagicWormhole.Internal.Rendezvous
       MagicWormhole.Internal.Sequential
+      MagicWormhole.Internal.Versions
       MagicWormhole.Internal.WebSockets
   default-language: Haskell2010
 
