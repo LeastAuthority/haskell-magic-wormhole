@@ -5,8 +5,8 @@
 -- protocol still, and what's in ClientProtocol is / are the first internal
 -- steps? the negotiation?
 module MagicWormhole.Internal.ApplicationProtocol
-  ( Session
-  , withSession
+  ( EncryptedConnection
+  , withEncryptedConnection
   , sendMessage
   , receiveMessage
   ) where
@@ -35,8 +35,8 @@ import qualified MagicWormhole.Internal.Sequential as Sequential
 --
 -- All messages in this session, sent & received, are encrypted using keys
 -- derived from this shared key.
-data Session
-  = Session
+data EncryptedConnection
+  = EncryptedConnection
   { connection :: Peer.Connection
   , key :: ClientProtocol.SessionKey
   , inbound :: Sequential.Sequential Int (Messages.Phase, ClientProtocol.PlainText)
@@ -50,18 +50,18 @@ data Session
 --
 -- Once you have the session, use 'sendMessage' to send encrypted messages to
 -- the peer, and 'receiveMessage' to received decrypted messages.
-withSession
+withEncryptedConnection
   :: Peer.Connection  -- ^ A connection to the other peer.
   -> ClientProtocol.SessionKey  -- ^ A successfully negotiated session key
-  -> (Session -> IO a)  -- ^ The action to perform
+  -> (EncryptedConnection -> IO a)  -- ^ The action to perform
   -> IO (Either ClientProtocol.Error a)  -- ^ The result of the action
-withSession conn sessionKey action = do
-  session <- atomically $ newSession conn sessionKey
-  runSession session action
+withEncryptedConnection conn sessionKey action = do
+  conn' <- atomically $ newEncryptedConnection conn sessionKey
+  runEncryptedConnection conn' action
 
 -- | Construct a new session.
-newSession :: Peer.Connection -> ClientProtocol.SessionKey -> STM Session
-newSession conn sessionKey = Session conn sessionKey <$> Sequential.sequenceBy getAppRank firstPhase <*> newTVar firstPhase
+newEncryptedConnection :: Peer.Connection -> ClientProtocol.SessionKey -> STM EncryptedConnection
+newEncryptedConnection conn sessionKey = EncryptedConnection conn sessionKey <$> Sequential.sequenceBy getAppRank firstPhase <*> newTVar firstPhase
   where
     getAppRank (phase, _) =
       case phase of
@@ -80,40 +80,40 @@ newSession conn sessionKey = Session conn sessionKey <$> Sequential.sequenceBy g
 -- Ensures that we are continually receiving messages from the peer, and
 -- buffering them so the application /using/ the session can receive them in
 -- order.
-runSession :: Session -> (Session -> IO a) -> IO (Either ClientProtocol.Error a)
-runSession session action = do
-  result <- race readLoop (action session)
+runEncryptedConnection :: EncryptedConnection -> (EncryptedConnection -> IO a) -> IO (Either ClientProtocol.Error a)
+runEncryptedConnection conn action = do
+  result <- race readLoop (action conn)
   pure $ case result of
            Left (Left readErr) -> Left readErr
            Left (Right _) -> panic "Cannot happen"
            Right r -> Right r
   where
     readLoop = do
-      msg <- atomically $ ClientProtocol.receiveEncrypted (connection session) (key session)
+      msg <- atomically $ ClientProtocol.receiveEncrypted (connection conn) (key conn)
       case msg of
         Left err -> pure $ Left err
         Right msg' -> do
-          atomically $ Sequential.insert (inbound session) msg'
+          atomically $ Sequential.insert (inbound conn) msg'
           readLoop
 
 -- | Send an encrypted message to the peer.
 --
--- Obtain a session with 'withSession'.
+-- Obtain an 'EncryptedConnection' with 'withEncryptedConnection'.
 --
 -- The message will be encrypted using a one-off key deriving from the shared
 -- key.
-sendMessage :: Session -> ClientProtocol.PlainText -> IO ()
-sendMessage session body = do
+sendMessage :: EncryptedConnection -> ClientProtocol.PlainText -> IO ()
+sendMessage conn body = do
   i <- atomically bumpPhase
-  ClientProtocol.sendEncrypted (connection session) (key session) (Messages.ApplicationPhase i) body
+  ClientProtocol.sendEncrypted (connection conn) (key conn) (Messages.ApplicationPhase i) body
   where
     bumpPhase = do
-      i <- readTVar (outbound session)
-      modifyTVar' (outbound session) (+1)
+      i <- readTVar (outbound conn)
+      modifyTVar' (outbound conn) (+1)
       pure i
 
 -- | Receive a decrypted message from the peer.
 --
--- Obtain a 'Session' with 'withSession'.
-receiveMessage :: Session -> STM ClientProtocol.PlainText
-receiveMessage session = snd <$> Sequential.next (inbound session)
+-- Obtain an 'EncryptedConnection' with 'withEncryptedConnection'.
+receiveMessage :: EncryptedConnection -> STM ClientProtocol.PlainText
+receiveMessage conn = snd <$> Sequential.next (inbound conn)
