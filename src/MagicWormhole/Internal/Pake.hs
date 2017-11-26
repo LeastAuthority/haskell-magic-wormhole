@@ -18,19 +18,19 @@ import Data.Aeson.Types (typeMismatch)
 import Data.ByteArray.Encoding (convertToBase, convertFromBase, Base(Base16))
 
 import qualified MagicWormhole.Internal.Messages as Messages
-import qualified MagicWormhole.Internal.Peer as Peer
+import qualified MagicWormhole.Internal.ClientProtocol as ClientProtocol
 
 -- | Exchange SPAKE2 keys with a Magic Wormhole peer.
-pakeExchange :: Peer.Connection -> Spake2.Password -> IO (Either (Spake2.MessageError Text) Peer.SessionKey)
+pakeExchange :: ClientProtocol.Connection -> Spake2.Password -> IO (Either (Spake2.MessageError Text) ClientProtocol.SessionKey)
 pakeExchange conn password = do
-  let protocol = wormholeSpakeProtocol (Peer.appID conn)
-  second Peer.SessionKey <$> Spake2.spake2Exchange protocol password sendPakeMessage (atomically receivePakeMessage)
+  let protocol = wormholeSpakeProtocol (ClientProtocol.appID conn)
+  second ClientProtocol.SessionKey <$> Spake2.spake2Exchange protocol password sendPakeMessage (atomically receivePakeMessage)
   where
-    sendPakeMessage = Peer.send conn Messages.PakePhase . spakeBytesToMessageBody
+    sendPakeMessage = ClientProtocol.send conn Messages.PakePhase . spakeBytesToMessageBody
     receivePakeMessage  = do
       -- XXX: This is kind of a fun approach, but it means that everyone else
       -- has to promise that they *don't* consume pake messages.
-      msg <- Peer.receive conn
+      msg <- ClientProtocol.receive conn
       unless (Messages.phase msg == Messages.PakePhase) retry
       pure $ messageBodyToSpakeBytes (Messages.body msg)
 

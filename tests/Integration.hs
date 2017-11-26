@@ -29,9 +29,9 @@ import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
 import qualified Crypto.Spake2 as Spake2
+import qualified MagicWormhole.Internal.ClientProtocol as ClientProtocol
 import qualified MagicWormhole.Internal.Messages as Messages
 import qualified MagicWormhole.Internal.Pake as Pake
-import qualified MagicWormhole.Internal.Peer as Peer
 import qualified MagicWormhole.Internal.Versions as Versions
 
 import qualified Paths_magic_wormhole
@@ -50,7 +50,7 @@ tests = testSpec "Integration" $ do
         , "--code=" <> toS password
         , "--side=" <> theirSide
         ] $ \stdin stdout -> do
-          Peer.SessionKey sessionKey <- withConnection (Messages.AppID appID) (Messages.Side ourSide) stdin stdout $ \conn -> do
+          ClientProtocol.SessionKey sessionKey <- withConnection (Messages.AppID appID) (Messages.Side ourSide) stdin stdout $ \conn -> do
             Right sessionKey <- Pake.pakeExchange conn password'
             pure sessionKey
           -- Calculate the shared key
@@ -61,9 +61,9 @@ tests = testSpec "Integration" $ do
       fakeSpakeKey <- Gen.sample $ Gen.bytes (Range.singleton 32)
       let side = "treebeard"
       let phase = Messages.VersionPhase
-      let ourPhaseKey = Peer.deriveKey
-                        (Peer.SessionKey fakeSpakeKey)
-                        (Peer.phasePurpose (Messages.Side side) phase)
+      let ourPhaseKey = ClientProtocol.deriveKey
+                        (ClientProtocol.SessionKey fakeSpakeKey)
+                        (ClientProtocol.phasePurpose (Messages.Side side) phase)
       interactWithPython "tests/python/derive_phase_key.py"
         [ "--spake-key=" <> toS (convertToBase Base16 fakeSpakeKey :: ByteString)
         , "--side=" <> toS side
@@ -98,13 +98,13 @@ tests = testSpec "Integration" $ do
         , "--nonce=" <> toS (convertToBase Base16 (Saltine.encode nonce) :: ByteString)
         ] $ \stdin stdout -> do
           let message = "Hello world!"
-          encryptedByUs <- Peer.encrypt key message
+          encryptedByUs <- ClientProtocol.encrypt key message
           Char8.hPutStrLn stdin (convertToBase Base16 encryptedByUs :: ByteString)
           decryptedByPython <- ByteString.hGetLine stdout
           decryptedByPython `shouldBe` message
           encryptedByPython <- ByteString.hGetLine stdout
           let Right encryptedBytes = convertFromBase Base16 encryptedByPython
-          let Right decryptedByUs = Peer.decrypt key encryptedBytes
+          let Right decryptedByUs = ClientProtocol.decrypt key encryptedBytes
           decryptedByUs `shouldBe` message
 
 
@@ -134,14 +134,14 @@ interactWithPython name args action = do
       IO.hSetBuffering stderr IO.LineBuffering
       action stdin stdout `finally` Process.waitForProcess ph
 
-withConnection :: Messages.AppID -> Messages.Side -> Handle -> Handle -> (Peer.Connection -> IO a) -> IO a
+withConnection :: Messages.AppID -> Messages.Side -> Handle -> Handle -> (ClientProtocol.Connection -> IO a) -> IO a
 withConnection appID ourSide stdin stdout action = do
   inChan <- atomically newTChan
-  let connection = Peer.Connection
-                   { Peer.appID = appID
-                   , Peer.ourSide = ourSide
-                   , Peer.send = send
-                   , Peer.receive = readTChan inChan
+  let connection = ClientProtocol.Connection
+                   { ClientProtocol.appID = appID
+                   , ClientProtocol.ourSide = ourSide
+                   , ClientProtocol.send = send
+                   , ClientProtocol.receive = readTChan inChan
                    }
   withAsync (receiveForever inChan) (\_ -> action connection)
   where

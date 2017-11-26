@@ -10,9 +10,9 @@ import qualified Options.Applicative as Opt
 
 import qualified Crypto.Spake2 as Spake2
 import qualified Data.Aeson as Aeson
-import qualified MagicWormhole.Internal.ClientProtocol as ClientProtocol
 import qualified MagicWormhole.Internal.FileTransfer as FileTransfer
 import qualified MagicWormhole.Internal.Messages as Messages
+import qualified MagicWormhole.Internal.Peer as Peer
 import qualified MagicWormhole.Internal.Rendezvous as Rendezvous
 import MagicWormhole.Internal.WebSockets (WebSocketEndpoint(..), parseWebSocketEndpoint)
 
@@ -53,7 +53,7 @@ makeOptions :: Text -> Opt.Parser a -> Opt.ParserInfo a
 makeOptions headerText parser = Opt.info (Opt.helper <*> parser) (Opt.fullDesc <> Opt.header (toS headerText))
 
 data Error
-  = PeerError ClientProtocol.Error
+  = PeerError Peer.Error
   | RendezvousError Rendezvous.Error
   deriving (Eq, Show)
 
@@ -66,9 +66,9 @@ app command session = do
     mailbox <- ExceptT $ first RendezvousError <$> Rendezvous.claim session nameplate
     peer <- liftIO $ Rendezvous.open session mailbox  -- XXX: We should run `close` in the case of exceptions?
     let (Messages.Nameplate n) = nameplate
-    ExceptT $ first PeerError <$> ClientProtocol.withEncryptedConnection peer (Spake2.makePassword (toS n <> "-potato")) (\conn -> do
+    ExceptT $ first PeerError <$> Peer.withEncryptedConnection peer (Spake2.makePassword (toS n <> "-potato")) (\conn -> do
       let offer = FileTransfer.Message "Brave new world that has such offers in it"
-      ClientProtocol.sendMessage conn (toS (Aeson.encode offer)))
+      Peer.sendMessage conn (toS (Aeson.encode offer)))
     ExceptT $ first RendezvousError <$> Rendezvous.close session (Just mailbox) (Just Messages.Happy)
   case result of
     Left err -> die $ "Failed to " <> show command <> ": " <> show err

@@ -11,8 +11,8 @@ import Data.Aeson.Types (typeMismatch)
 import qualified Data.Aeson as Aeson
 import Data.String (String)
 
+import qualified MagicWormhole.Internal.ClientProtocol as ClientProtocol
 import qualified MagicWormhole.Internal.Messages as Messages
-import qualified MagicWormhole.Internal.Peer as Peer
 
 -- NOTE: Versions
 -- ~~~~~~~~~~~~~~
@@ -27,7 +27,7 @@ import qualified MagicWormhole.Internal.Peer as Peer
 -- | Exchange version information with a Magic Wormhole peer.
 --
 -- Obtain the 'SessionKey' from 'pakeExchange'.
-versionExchange :: Peer.Connection -> Peer.SessionKey -> IO (Either Error Versions)
+versionExchange :: ClientProtocol.Connection -> ClientProtocol.SessionKey -> IO (Either Error Versions)
 versionExchange conn key = do
   (_, theirVersions) <- concurrently sendVersion (atomically receiveVersion)
   pure $ case theirVersions of
@@ -36,9 +36,9 @@ versionExchange conn key = do
       | theirs /= Versions -> Left VersionMismatch
       | otherwise -> Right Versions
   where
-    sendVersion = Peer.sendEncrypted conn key Messages.VersionPhase (toS (Aeson.encode Versions))
+    sendVersion = ClientProtocol.sendEncrypted conn key Messages.VersionPhase (toS (Aeson.encode Versions))
     receiveVersion = runExceptT $ do
-      (phase, plaintext) <- ExceptT $ first CryptoError <$> Peer.receiveEncrypted conn key
+      (phase, plaintext) <- ExceptT $ first CryptoError <$> ClientProtocol.receiveEncrypted conn key
       lift $ unless (phase == Messages.VersionPhase) retry
       ExceptT $ pure $ first ParseError (Aeson.eitherDecode (toS plaintext))
 
@@ -58,5 +58,5 @@ instance FromJSON Versions where
 data Error
   = ParseError String
   | VersionMismatch
-  | CryptoError Peer.Error
+  | CryptoError ClientProtocol.Error
   deriving (Eq, Show)
