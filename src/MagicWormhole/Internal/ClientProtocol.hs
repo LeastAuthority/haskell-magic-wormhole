@@ -134,6 +134,31 @@ versionExchange conn key = do
       lift $ unless (phase == Messages.VersionPhase) retry
       ExceptT $ pure $ first ParseError (Aeson.eitherDecode (toS plaintext))
 
+-- | Establish an encrypted connection between peers.
+--
+-- Use this connection with 'withEncryptedConnection'.
+establishEncryption :: Peer.Connection -> Spake2.Password -> IO (Either Error EncryptedConnection)
+establishEncryption peer password = runExceptT $ do
+  key <- ExceptT $ pakeExchange peer password
+  void $ ExceptT $ versionExchange peer key
+  conn <- liftIO $ atomically $ newEncryptedConnection peer key
+  pure conn
+
+-- | Run an action that communicates with a Magic Wormhole peer through an
+-- encrypted connection.
+--
+-- Does the "pake" and "version" exchanges necessary to negotiate an encrypted
+-- connection and then runs the user-provided action. This action can then use
+-- 'sendMessage' and 'receiveMessage' to send & receive messages from its peer.
+withEncryptedConnection
+  :: Peer.Connection  -- ^ Underlying to a peer. Get this with 'Rendezvous.open'.
+  -> Spake2.Password  -- ^ The shared password that is the basis of the encryption. Construct with 'Spake2.makePassword'.
+  -> (EncryptedConnection -> IO a)  -- ^ Action to perform with the encrypted connection.
+  -> IO (Either Error a)  -- ^ The result of the action, or some sort of protocol-level error.
+withEncryptedConnection peer password action = runExceptT $ do
+  conn <- ExceptT $ establishEncryption peer password
+  ExceptT $ runEncryptedConnection conn (action conn)
+
 -- NOTE: Versions
 -- ~~~~~~~~~~~~~~
 --
@@ -235,23 +260,7 @@ data EncryptedConnection
   , outbound :: TVar Int
   }
 
--- | Take a successfully negotiated peer connection and run an action with an
--- active session, returning the result of the action.
---
--- Use this to communicate with a Magic Wormhole peer.
---
--- Once you have the session, use 'sendMessage' to send encrypted messages to
--- the peer, and 'receiveMessage' to received decrypted messages.
-withEncryptedConnection
-  :: Peer.Connection  -- ^ A connection to the other peer.
-  -> SessionKey  -- ^ A successfully negotiated session key
-  -> (EncryptedConnection -> IO a)  -- ^ The action to perform
-  -> IO (Either Error a)  -- ^ The result of the action
-withEncryptedConnection conn sessionKey action = do
-  conn' <- atomically $ newEncryptedConnection conn sessionKey
-  runEncryptedConnection conn' action
-
--- | Construct a new session.
+-- | Construct a new encrypted connection.
 newEncryptedConnection :: Peer.Connection -> SessionKey -> STM EncryptedConnection
 newEncryptedConnection conn sessionKey = EncryptedConnection conn sessionKey <$> Sequential.sequenceBy getAppRank firstPhase <*> newTVar firstPhase
   where
@@ -267,14 +276,21 @@ newEncryptedConnection conn sessionKey = EncryptedConnection conn sessionKey <$>
     -- message 0, which the other side has cheerily sent as message 1.
     firstPhase = 0
 
--- | Run an action inside a session.
+-- | Take a successfully negotiated peer connection and run an action that
+-- sends and receives encrypted messages.
 --
--- Ensures that we are continually receiving messages from the peer, and
--- buffering them so the application /using/ the session can receive them in
--- order.
-runEncryptedConnection :: EncryptedConnection -> (EncryptedConnection -> IO a) -> IO (Either Error a)
+-- Establish an encrypted connection using 'establishEncryption'.
+--
+-- Use this to communicate with a Magic Wormhole peer.
+--
+-- Once you have the session, use 'sendMessage' to send encrypted messages to
+-- the peer, and 'receiveMessage' to received decrypted messages.
+runEncryptedConnection
+  :: EncryptedConnection
+  -> IO a
+  -> IO (Either Error a)
 runEncryptedConnection conn action = do
-  result <- race readLoop (action conn)
+  result <- race readLoop action
   pure $ case result of
            Left (Left readErr) -> Left readErr
            Left (Right _) -> panic "Cannot happen"
