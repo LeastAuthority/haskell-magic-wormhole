@@ -49,6 +49,7 @@ library
   exposed-modules:
       MagicWormhole.Internal.ApplicationProtocol
       MagicWormhole.Internal.ClientProtocol
+      MagicWormhole.Internal.FileTransfer
       MagicWormhole.Internal.Messages
       MagicWormhole.Internal.Peer
       MagicWormhole.Internal.Rendezvous
@@ -64,6 +65,7 @@ executable hocus-pocus
   build-depends:
       base
     , protolude >= 0.2
+    , aeson
     , magic-wormhole
     , optparse-applicative
     , spake2 >= 0.4

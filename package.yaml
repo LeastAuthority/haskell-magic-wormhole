@@ -41,6 +41,7 @@ executables:
     main: HocusPocus.hs
     source-dirs: cmd
     dependencies:
+      - aeson
       - magic-wormhole
       - optparse-applicative
       - spake2 >= 0.4
