@@ -66,10 +66,7 @@ app command session = do
     mailbox <- ExceptT $ first RendezvousError <$> Rendezvous.claim session nameplate
     peer <- liftIO $ Rendezvous.open session mailbox  -- XXX: We should run `close` in the case of exceptions?
     let (Messages.Nameplate n) = nameplate
-    key <- ExceptT $ first PeerError <$> ClientProtocol.pakeExchange peer (Spake2.makePassword (toS n <> "-potato"))
-    version <- ExceptT $ first PeerError <$> ClientProtocol.versionExchange peer key
-    print version
-    ExceptT $ first PeerError <$> ClientProtocol.withEncryptedConnection peer key (\conn -> do
+    ExceptT $ first PeerError <$> ClientProtocol.withEncryptedConnection peer (Spake2.makePassword (toS n <> "-potato")) (\conn -> do
       let offer = FileTransfer.Message "Brave new world that has such offers in it"
       ClientProtocol.sendMessage conn (toS (Aeson.encode offer)))
     ExceptT $ first RendezvousError <$> Rendezvous.close session (Just mailbox) (Just Messages.Happy)
