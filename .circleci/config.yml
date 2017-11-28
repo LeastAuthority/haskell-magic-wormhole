@@ -19,6 +19,10 @@ jobs:
           paths:
             - /root/.stack
       - run:
+          # saltine needs libsodium 0.13+ and this is the only PPA I could find.
+          name: Add PPA with libsodium 0.13+
+          command: apt-add-repository -y ppa:ondrej/php
+      - run:
           name: apt-get update
           command: apt-get update
       - run:
