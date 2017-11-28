@@ -158,13 +158,13 @@ receiveEncrypted session key = do
 
 -- | The purpose of a message. 'deriveKey' combines this with the 'SessionKey'
 -- to make a unique 'SecretBox.Key'. Do not re-use a 'Purpose' to send more
--- than message.
+-- than one message.
 type Purpose = ByteString
 
 -- | Derive a one-off key from the SPAKE2 'SessionKey'. Use this key only once.
 deriveKey :: SessionKey -> Purpose -> SecretBox.Key
 deriveKey (SessionKey key) purpose =
-  fromMaybe (panic "Could not encode to SecretBox key") $ -- Impossible. We guarntee it's the right size.
+  fromMaybe (panic "Could not encode to SecretBox key") $ -- Impossible. We guarantee it's the right size.
     Saltine.decode (HKDF.expand (HKDF.extract salt key :: HKDF.PRK SHA256) purpose keySize)
   where
     salt = "" :: ByteString

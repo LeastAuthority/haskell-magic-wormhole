@@ -32,7 +32,7 @@ import qualified Paths_magic_wormhole
 tests :: IO TestTree
 tests = testSpec "Integration" $ do
   describe "SPAKE2 and version exchange" $ do
-    it "Generates the same SPAKE2 session key" $ do
+    it "Generates the same SPAKE2 session key as the python-spake2 library" $ do
       let appID = "jml.io/haskell-magic-wormhole-test"
       let password = "mellon"
       let password' = Spake2.makePassword password
