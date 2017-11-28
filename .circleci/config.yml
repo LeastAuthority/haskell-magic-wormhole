@@ -33,6 +33,9 @@ jobs:
           name: Install pip
           command: apt-get install -y python-pip
       - run:
+          name: Install libsodium (for saltine)
+          command: apt-get install -y libsodium-dev
+      - run:
           name: Install dependencies
           command: pip install --user -r requirements.txt
       - run:
