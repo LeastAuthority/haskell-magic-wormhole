@@ -65,7 +65,8 @@ app command session = do
     liftIO $ Rendezvous.open session mailbox  -- XXX: We should run `close` in the case of exceptions?
     let (Messages.Nameplate n) = nameplate
     key <- ExceptT $ first PeerError <$> Peer.pakeExchange session (Spake2.makePassword (toS n <> "-potato"))
-    print key
+    version <- ExceptT $ first PeerError <$> Peer.versionExchange session key
+    print version
     ExceptT $ first RendezvousError <$> Rendezvous.close session (Just mailbox) (Just Messages.Happy)
   case result of
     Left err -> die $ "Failed to " <> show command <> ": " <> show err

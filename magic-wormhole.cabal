@@ -14,6 +14,12 @@ license:        Apache
 build-type:     Simple
 cabal-version:  >= 1.10
 
+data-files:
+    tests/python/derive_phase_key.py
+    tests/python/nacl_exchange.py
+    tests/python/spake2_exchange.py
+    tests/python/version_exchange.py
+
 source-repository head
   type: git
   location: https://github.com/jml/haskell-magic-wormhole
@@ -27,13 +33,15 @@ library
       base
     , protolude >= 0.2
     , aeson
+    , bytestring
     , containers
     , cryptonite
     , hashable
     , memory
     , network
     , network-uri
-    , spake2 >= 0.3
+    , saltine
+    , spake2 >= 0.4
     , stm
     , unordered-containers
     , websockets
@@ -55,7 +63,7 @@ executable hocus-pocus
     , protolude >= 0.2
     , magic-wormhole
     , optparse-applicative
-    , spake2 >= 0.3
+    , spake2 >= 0.4
   default-language: Haskell2010
 
 test-suite tasty
@@ -69,13 +77,19 @@ test-suite tasty
       base
     , protolude >= 0.2
     , aeson
+    , bytestring
     , hedgehog
     , magic-wormhole
+    , memory
+    , process
+    , saltine
     , spake2 >= 0.3
     , tasty
     , tasty-hedgehog
     , tasty-hspec
   other-modules:
+      Generator
+      Integration
       Messages
       Peer
       WebSockets

@@ -1,27 +1,28 @@
+-- | Tests for the "client protocol".
 module Peer (tests) where
 
-import Protolude
+import Protolude hiding (phase)
 
-import Hedgehog (MonadGen(..), forAll, property, tripping)
+import Hedgehog (forAll, property, tripping, (===))
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.Hedgehog (testProperty)
 
-import qualified Crypto.Spake2.Group as Group
-import Crypto.Spake2.Groups (Ed25519(Ed25519))
 import qualified MagicWormhole.Internal.Peer as Peer
 
-import qualified Messages as MessagesTest
 
 tests :: IO TestTree
 tests = pure $ testGroup "Peer"
   [ testProperty "SPAKE2 messages roundtrip" $ property $ do
-      appID <- forAll MessagesTest.appIDs
-      let protocol = Peer.wormholeSpakeProtocol appID
-      element <- forAll elements
-      tripping element (Peer.encodeElement protocol) (Peer.decodeElement protocol)
+      element <- forAll $ Gen.bytes (Range.singleton 32)
+      tripping element Peer.spakeBytesToMessageBody Peer.messageBodyToSpakeBytes
+  , testProperty "SecretBox encryption roundtrips" $ property $ do
+      purpose <- forAll $ Gen.bytes (Range.linear 0 10)
+      secret <- forAll $ Gen.bytes (Range.linear 0 10)
+      let key = Peer.deriveKey (Peer.SessionKey secret) purpose
+      plaintext <- forAll $ Gen.bytes (Range.linear 1 256)
+      ciphertext <- liftIO $ Peer.encrypt key plaintext
+      let decrypted = Peer.decrypt key ciphertext
+      decrypted === Right plaintext
   ]
-  where
-    elements :: MonadGen m => m (Group.Element Ed25519)
-    elements = Group.arbitraryElement Ed25519 <$> Gen.bytes (Range.linear 0 10)

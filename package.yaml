@@ -22,13 +22,15 @@ library:
   source-dirs: src
   dependencies:
     - aeson
+    - bytestring
     - containers
     - cryptonite
     - hashable
     - memory
     - network
     - network-uri
-    - spake2 >= 0.3
+    - saltine
+    - spake2 >= 0.4
     - stm
     - unordered-containers
     - websockets
@@ -40,7 +42,7 @@ executables:
     dependencies:
       - magic-wormhole
       - optparse-applicative
-      - spake2 >= 0.3
+      - spake2 >= 0.4
 
 tests:
   tasty:
@@ -48,10 +50,20 @@ tests:
     source-dirs: tests
     dependencies:
       - aeson
+      - bytestring
       - hedgehog
       - magic-wormhole
+      - memory
+      - process
+      - saltine
       - spake2 >= 0.3
       - tasty
       - tasty-hedgehog
       - tasty-hspec
 
+# These are only for tests.
+data-files:
+  - tests/python/derive_phase_key.py
+  - tests/python/nacl_exchange.py
+  - tests/python/spake2_exchange.py
+  - tests/python/version_exchange.py
