@@ -9,6 +9,11 @@ module Integration (tests) where
 
 import Protolude hiding (phase, stdin, stdout)
 
+import Control.Concurrent.STM.TChan
+  ( newTChan
+  , readTChan
+  , writeTChan
+  )
 import qualified Crypto.Saltine.Class as Saltine
 import qualified Crypto.Saltine.Core.SecretBox as SecretBox
 import qualified Data.Aeson as Aeson
@@ -24,6 +29,7 @@ import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 
 import qualified Crypto.Spake2 as Spake2
+import qualified MagicWormhole.Internal.ClientProtocol as ClientProtocol
 import qualified MagicWormhole.Internal.Messages as Messages
 import qualified MagicWormhole.Internal.Peer as Peer
 
@@ -43,9 +49,9 @@ tests = testSpec "Integration" $ do
         , "--code=" <> toS password
         , "--side=" <> theirSide
         ] $ \stdin stdout -> do
-          let protocol = Peer.wormholeSpakeProtocol (Messages.AppID appID)
-          Right sessionKey <- Spake2.spake2Exchange protocol password'
-            (sendPakeBytes stdin ourSide) (receivePakeBytes stdout)
+          ClientProtocol.SessionKey sessionKey <- withConnection (Messages.AppID appID) (Messages.Side ourSide) stdin stdout $ \conn -> do
+            Right sessionKey <- ClientProtocol.pakeExchange conn password'
+            pure sessionKey
           -- Calculate the shared key
           theirSpakeKey <- ByteString.hGetLine stdout
           theirSpakeKey `shouldBe` convertToBase Base16 sessionKey
@@ -54,9 +60,9 @@ tests = testSpec "Integration" $ do
       fakeSpakeKey <- Gen.sample $ Gen.bytes (Range.singleton 32)
       let side = "treebeard"
       let phase = Messages.VersionPhase
-      let ourPhaseKey = Peer.deriveKey
-                        (Peer.SessionKey fakeSpakeKey)
-                        (Peer.phasePurpose (Messages.Side side) phase)
+      let ourPhaseKey = ClientProtocol.deriveKey
+                        (ClientProtocol.SessionKey fakeSpakeKey)
+                        (ClientProtocol.phasePurpose (Messages.Side side) phase)
       interactWithPython "tests/python/derive_phase_key.py"
         [ "--spake-key=" <> toS (convertToBase Base16 fakeSpakeKey :: ByteString)
         , "--side=" <> toS side
@@ -76,27 +82,11 @@ tests = testSpec "Integration" $ do
         , "--side=" <> toS otherSide
         , "--code=" <> toS password
         ] $ \stdin stdout -> do
-          let protocol = Peer.wormholeSpakeProtocol (Messages.AppID appID)
-          Right sessionKey <- Peer.SessionKey <<$>> Spake2.spake2Exchange protocol password'
-            (sendPakeBytes stdin ourSide) (receivePakeBytes stdout)
-          -- Receive their versions message
-          theirVersions <- readMailboxMessage stdout
-          -- Send our versions message
-          let ourKey = Peer.deriveKey sessionKey (Peer.phasePurpose (Messages.Side ourSide) Messages.VersionPhase)
-          encrypted <- Peer.encrypt ourKey (toS (Aeson.encode Peer.Versions))
-          sendMailboxMessage stdin Messages.MailboxMessage
-            { Messages.phase = Messages.VersionPhase
-            , Messages.side = Messages.Side ourSide
-            , Messages.body = Messages.Body encrypted
-            , Messages.messageID = Nothing
-            }
-          Messages.phase theirVersions `shouldBe` Messages.VersionPhase
-          -- Decrypt their versions message.
-          let (Messages.Body ciphertext) = Messages.body theirVersions
-          let theirKey = Peer.deriveKey sessionKey (Peer.phasePurpose (Messages.Side otherSide) Messages.VersionPhase)
-          let Right plaintext = Peer.decrypt theirKey ciphertext
-          let Right versions = Aeson.eitherDecode (toS plaintext)
-          versions `shouldBe` Peer.Versions
+          versions <- withConnection (Messages.AppID appID) (Messages.Side ourSide) stdin stdout $ \conn -> do
+            Right sessionKey <- ClientProtocol.pakeExchange conn password'
+            Right versions <- ClientProtocol.versionExchange conn sessionKey
+            pure versions
+          versions `shouldBe` ClientProtocol.Versions
 
   describe "NaCL interoperability" $
     it "Swaps messages with Python" $ do
@@ -107,13 +97,13 @@ tests = testSpec "Integration" $ do
         , "--nonce=" <> toS (convertToBase Base16 (Saltine.encode nonce) :: ByteString)
         ] $ \stdin stdout -> do
           let message = "Hello world!"
-          encryptedByUs <- Peer.encrypt key message
+          encryptedByUs <- ClientProtocol.encrypt key message
           Char8.hPutStrLn stdin (convertToBase Base16 encryptedByUs :: ByteString)
           decryptedByPython <- ByteString.hGetLine stdout
           decryptedByPython `shouldBe` message
           encryptedByPython <- ByteString.hGetLine stdout
           let Right encryptedBytes = convertFromBase Base16 encryptedByPython
-          let Right decryptedByUs = Peer.decrypt key encryptedBytes
+          let Right decryptedByUs = ClientProtocol.decrypt key encryptedBytes
           decryptedByUs `shouldBe` message
 
 
@@ -143,25 +133,26 @@ interactWithPython name args action = do
       IO.hSetBuffering stderr IO.LineBuffering
       action stdin stdout `finally` Process.waitForProcess ph
 
-
--- | Send SPAKE2 bytes as a mailbox message to a file handle.
-sendPakeBytes :: Handle -> Text -> ByteString -> IO ()
-sendPakeBytes stdin ourSide pakeBytes = do
-  let body = Peer.spakeBytesToMessageBody pakeBytes
-  sendMailboxMessage stdin Messages.MailboxMessage
-    { Messages.phase = Messages.PakePhase
-    , Messages.side = Messages.Side ourSide
-    , Messages.body = body
-    , Messages.messageID = Nothing
-    }
-
--- | Receive SPAKE2 bytes as a mailbox message from a file handle.
-receivePakeBytes :: Handle -> IO (Either Text ByteString)
-receivePakeBytes stdout = do
-  theirMessage <- readMailboxMessage stdout
-  Messages.phase theirMessage `shouldBe` Messages.PakePhase
-  pure . Peer.messageBodyToSpakeBytes . Messages.body $ theirMessage
-
+withConnection :: Messages.AppID -> Messages.Side -> Handle -> Handle -> (Peer.Connection -> IO a) -> IO a
+withConnection appID ourSide stdin stdout action = do
+  inChan <- atomically newTChan
+  let connection = Peer.Connection
+                   { Peer.appID = appID
+                   , Peer.ourSide = ourSide
+                   , Peer.send = send
+                   , Peer.receive = readTChan inChan
+                   }
+  withAsync (receiveForever inChan) (\_ -> action connection)
+  where
+    send phase body =
+      sendMailboxMessage stdin Messages.MailboxMessage { Messages.phase = phase
+                                                       , Messages.side = ourSide
+                                                       , Messages.body = body
+                                                       , Messages.messageID = Nothing
+                                                       }
+    receiveForever inChan = forever $ do
+      msg <- readMailboxMessage stdout
+      atomically $ writeTChan inChan msg
 
 readMailboxMessage :: HasCallStack => Handle -> IO Messages.MailboxMessage
 readMailboxMessage h = do
