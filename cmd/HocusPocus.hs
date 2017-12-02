@@ -53,7 +53,7 @@ makeOptions :: Text -> Opt.Parser a -> Opt.ParserInfo a
 makeOptions headerText parser = Opt.info (Opt.helper <*> parser) (Opt.fullDesc <> Opt.header (toS headerText))
 
 -- | Execute 'Command' against a Wormhole Rendezvous server.
-app :: Command -> Rendezvous.Session -> IO ()
+app :: Command -> Rendezvous.Session -> IO Int
 app command session = do
   print command
   nameplate <- Rendezvous.allocate session
@@ -64,11 +64,13 @@ app command session = do
     (\conn -> do
         let offer = FileTransfer.Message "Brave new world that has such offers in it"
         Peer.sendMessage conn (toS (Aeson.encode offer)))
+  pure 42
 
 main :: IO ()
 main = do
   options <- Opt.execParser (makeOptions "hocus-pocus - summon and traverse magic wormholes" optionsParser)
-  Rendezvous.runClient (rendezvousEndpoint options) appID side (app (cmd options))
+  result <- Rendezvous.runClient (rendezvousEndpoint options) appID side (app (cmd options))
+  print result
   where
     appID = Messages.AppID "jml.io/hocus-pocus"
     side = Messages.Side "treebeard"

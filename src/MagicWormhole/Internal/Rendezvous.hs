@@ -51,6 +51,7 @@ import qualified Network.WebSockets as WS
 import qualified MagicWormhole.Internal.ClientProtocol as ClientProtocol
 import qualified MagicWormhole.Internal.Messages as Messages
 import MagicWormhole.Internal.WebSockets (WebSocketEndpoint(..))
+import qualified MagicWormhole.Internal.WebSockets as WebSockets
 
 -- | Abstract type representing a Magic Wormhole session.
 --
@@ -107,8 +108,8 @@ runClient
   -> Messages.Side -- ^ Identifier for your side
   -> (Session -> IO a) -- ^ Action to perform inside the Magic Wormhole session
   -> IO a -- ^ The result of the action
-runClient (WebSocketEndpoint host port path) appID side app =
-  Socket.withSocketsDo . WS.runClient host port path $ \ws -> do
+runClient endpoint appID side app =
+  Socket.withSocketsDo . WebSockets.runClient endpoint $ \ws -> do
     session <- atomically $ new ws appID side
     result <- race (readMessages session) (action session)
     case result of
