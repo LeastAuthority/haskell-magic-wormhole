@@ -141,7 +141,10 @@ withConnection appID ourSide stdin stdout action = do
                    , ClientProtocol.send = send
                    , ClientProtocol.receive = readTChan inChan
                    }
-  withAsync (receiveForever inChan) (\_ -> action connection)
+  result <- race (receiveForever inChan) (action connection)
+  case result of
+    Left err -> panic ("Couldn't read messages: " <> show @Text err)
+    Right r -> pure r
   where
     send phase body =
       sendMailboxMessage stdin Messages.MailboxMessage { Messages.phase = phase
