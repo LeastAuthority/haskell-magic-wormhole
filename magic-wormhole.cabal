@@ -98,5 +98,6 @@ test-suite tasty
       Generator
       Integration
       Messages
+      Sequential
       WebSockets
   default-language: Haskell2010
