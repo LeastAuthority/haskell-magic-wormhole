@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections #-}
 -- | The peer-to-peer aspects of the Magic Wormhole protocol.
 --
 -- Described as the "client" protocol in the Magic Wormhole documentation.
@@ -5,6 +6,14 @@ module MagicWormhole.Internal.ClientProtocol
   ( pakeExchange
   , versionExchange
   , Error
+  , sendEncrypted
+  , receiveEncrypted
+  , PlainText
+  -- * Talking to peers
+  , EncryptedConnection
+  , withEncryptedConnection
+  , sendMessage
+  , receiveMessage
   -- * Exported for testing
   , decrypt
   , encrypt
@@ -18,6 +27,12 @@ module MagicWormhole.Internal.ClientProtocol
 
 import Protolude hiding (phase)
 
+import Control.Concurrent.STM.TVar
+  ( TVar
+  , modifyTVar'
+  , newTVar
+  , readTVar
+  )
 import Control.Monad (fail)
 import Crypto.Hash (SHA256(..), hashWith)
 import qualified Crypto.KDF.HKDF as HKDF
@@ -37,6 +52,7 @@ import Data.String (String)
 
 import qualified MagicWormhole.Internal.Messages as Messages
 import qualified MagicWormhole.Internal.Peer as Peer
+import qualified MagicWormhole.Internal.Sequential as Sequential
 
 
 -- | The version of the SPAKE2 protocol used by Magic Wormhole.
@@ -88,15 +104,15 @@ newtype SessionKey = SessionKey ByteString
 
 -- | Exchange SPAKE2 keys with a Magic Wormhole peer.
 pakeExchange :: Peer.Connection -> Spake2.Password -> IO (Either Error SessionKey)
-pakeExchange connection password = do
-  let protocol = wormholeSpakeProtocol (Peer.appID connection)
+pakeExchange conn password = do
+  let protocol = wormholeSpakeProtocol (Peer.appID conn)
   bimap ProtocolError SessionKey <$> Spake2.spake2Exchange protocol password sendPakeMessage (atomically receivePakeMessage)
   where
-    sendPakeMessage = Peer.send connection Messages.PakePhase . spakeBytesToMessageBody
+    sendPakeMessage = Peer.send conn Messages.PakePhase . spakeBytesToMessageBody
     receivePakeMessage  = do
       -- XXX: This is kind of a fun approach, but it means that everyone else
       -- has to promise that they *don't* consume pake messages.
-      msg <- Peer.receive connection
+      msg <- Peer.receive conn
       unless (Messages.phase msg == Messages.PakePhase) retry
       pure $ messageBodyToSpakeBytes (Messages.body msg)
 
@@ -104,18 +120,44 @@ pakeExchange connection password = do
 --
 -- Obtain the 'SessionKey' from 'pakeExchange'.
 versionExchange :: Peer.Connection -> SessionKey -> IO (Either Error Versions)
-versionExchange connection key = do
-  (_, theirVersions) <- concurrently sendVersion receiveVersion
+versionExchange conn key = do
+  (_, theirVersions) <- concurrently sendVersion (atomically receiveVersion)
   pure $ case theirVersions of
     Left err -> Left err
     Right theirs
       | theirs /= Versions -> Left VersionMismatch
       | otherwise -> Right Versions
   where
-    sendVersion = sendEncrypted connection key Messages.VersionPhase (toS (Aeson.encode Versions))
+    sendVersion = sendEncrypted conn key Messages.VersionPhase (toS (Aeson.encode Versions))
     receiveVersion = runExceptT $ do
-      plaintext <- ExceptT $ receiveEncrypted connection key
+      (phase, plaintext) <- ExceptT $ receiveEncrypted conn key
+      lift $ unless (phase == Messages.VersionPhase) retry
       ExceptT $ pure $ first ParseError (Aeson.eitherDecode (toS plaintext))
+
+-- | Establish an encrypted connection between peers.
+--
+-- Use this connection with 'withEncryptedConnection'.
+establishEncryption :: Peer.Connection -> Spake2.Password -> IO (Either Error EncryptedConnection)
+establishEncryption peer password = runExceptT $ do
+  key <- ExceptT $ pakeExchange peer password
+  void $ ExceptT $ versionExchange peer key
+  conn <- liftIO $ atomically $ newEncryptedConnection peer key
+  pure conn
+
+-- | Run an action that communicates with a Magic Wormhole peer through an
+-- encrypted connection.
+--
+-- Does the "pake" and "version" exchanges necessary to negotiate an encrypted
+-- connection and then runs the user-provided action. This action can then use
+-- 'sendMessage' and 'receiveMessage' to send & receive messages from its peer.
+withEncryptedConnection
+  :: Peer.Connection  -- ^ Underlying to a peer. Get this with 'Rendezvous.open'.
+  -> Spake2.Password  -- ^ The shared password that is the basis of the encryption. Construct with 'Spake2.makePassword'.
+  -> (EncryptedConnection -> IO a)  -- ^ Action to perform with the encrypted connection.
+  -> IO (Either Error a)  -- ^ The result of the action, or some sort of protocol-level error.
+withEncryptedConnection peer password action = runExceptT $ do
+  conn <- ExceptT $ establishEncryption peer password
+  ExceptT $ runEncryptedConnection conn (action conn)
 
 -- NOTE: Versions
 -- ~~~~~~~~~~~~~~
@@ -141,17 +183,17 @@ instance FromJSON Versions where
 
 
 sendEncrypted :: Peer.Connection -> SessionKey -> Messages.Phase -> PlainText -> IO ()
-sendEncrypted connection key phase plaintext = do
+sendEncrypted conn key phase plaintext = do
   ciphertext <- encrypt derivedKey plaintext
-  Peer.send connection phase (Messages.Body ciphertext)
+  Peer.send conn phase (Messages.Body ciphertext)
   where
-    derivedKey = deriveKey key (phasePurpose (Peer.ourSide connection) phase)
+    derivedKey = deriveKey key (phasePurpose (Peer.ourSide conn) phase)
 
-receiveEncrypted :: Peer.Connection -> SessionKey -> IO (Either Error PlainText)
-receiveEncrypted connection key = do
-  message <- atomically $ Peer.receive connection
+receiveEncrypted :: Peer.Connection -> SessionKey -> STM (Either Error (Messages.Phase, PlainText))
+receiveEncrypted conn key = do
+  message <- Peer.receive conn
   let Messages.Body ciphertext = Messages.body message
-  pure $ decrypt (derivedKey message) ciphertext
+  pure $ (Messages.phase message,) <$> decrypt (derivedKey message) ciphertext
   where
     derivedKey msg = deriveKey key (phasePurpose (Messages.side msg) (Messages.phase msg))
 
@@ -200,10 +242,98 @@ decrypt key ciphertext = do
   note (CouldNotDecrypt ciphertext') $ SecretBox.secretboxOpen key nonce ciphertext'
 
 
+-- | A Magic Wormhole peer-to-peer application session.
+--
+-- You get one of these after you have found a peer, successfully negotatiated
+-- a shared key, and verified that negotiation by exchanging versions. (Note
+-- that this does not include the "verifying" step mentioned in
+-- magic-wormhole's documentation, which is about a human being verifying the
+-- correctness of the code).
+--
+-- All messages in this session, sent & received, are encrypted using keys
+-- derived from this shared key.
+data EncryptedConnection
+  = EncryptedConnection
+  { connection :: Peer.Connection
+  , sharedKey :: SessionKey
+  , inbound :: Sequential.Sequential Int (Messages.Phase, PlainText)
+  , outbound :: TVar Int
+  }
+
+-- | Construct a new encrypted connection.
+newEncryptedConnection :: Peer.Connection -> SessionKey -> STM EncryptedConnection
+newEncryptedConnection conn sessionKey = EncryptedConnection conn sessionKey <$> Sequential.sequenceBy getAppRank firstPhase <*> newTVar firstPhase
+  where
+    getAppRank (phase, _) =
+      case phase of
+        Messages.PakePhase -> panic "Did not expect PakePhase. Expected application phase."
+        Messages.VersionPhase -> panic "Did not expect VersionPhase. Expected application phase."
+        (Messages.ApplicationPhase n) -> n
+
+    -- | The rank of the first phase we expect to send, and the first phase we
+    -- expect to receive. It is critically important that this number is
+    -- agreed on between peers, otherwise, a peer will wait forever for, say,
+    -- message 0, which the other side has cheerily sent as message 1.
+    firstPhase = 0
+
+-- | Take a successfully negotiated peer connection and run an action that
+-- sends and receives encrypted messages.
+--
+-- Establish an encrypted connection using 'establishEncryption'.
+--
+-- Use this to communicate with a Magic Wormhole peer.
+--
+-- Once you have the session, use 'sendMessage' to send encrypted messages to
+-- the peer, and 'receiveMessage' to received decrypted messages.
+runEncryptedConnection
+  :: EncryptedConnection
+  -> IO a
+  -> IO (Either Error a)
+runEncryptedConnection conn action = do
+  result <- race readLoop action
+  pure $ case result of
+           Left (Left readErr) -> Left readErr
+           Left (Right _) -> panic "Cannot happen"
+           Right r -> Right r
+  where
+    readLoop = do
+      msg <- atomically $ receiveEncrypted (connection conn) (sharedKey conn)
+      case msg of
+        Left err -> pure $ Left err
+        Right msg' -> do
+          inserted <- atomically $ Sequential.insert (inbound conn) msg'
+          if inserted
+            then readLoop
+            else pure (Left (uncurry MessageOutOfOrder msg'))
+
+-- | Send an encrypted message to the peer.
+--
+-- Obtain an 'EncryptedConnection' with 'withEncryptedConnection'.
+--
+-- The message will be encrypted using a one-off key deriving from the shared
+-- key.
+sendMessage :: EncryptedConnection -> PlainText -> IO ()
+sendMessage conn body = do
+  i <- atomically bumpPhase
+  sendEncrypted (connection conn) (sharedKey conn) (Messages.ApplicationPhase i) body
+  where
+    bumpPhase = do
+      i <- readTVar (outbound conn)
+      modifyTVar' (outbound conn) (+1)
+      pure i
+
+-- | Receive a decrypted message from the peer.
+--
+-- Obtain an 'EncryptedConnection' with 'withEncryptedConnection'.
+receiveMessage :: EncryptedConnection -> STM PlainText
+receiveMessage conn = snd <$> Sequential.next (inbound conn)
+
+
 data Error
   = ParseError String
   | ProtocolError (Spake2.MessageError Text)
   | CouldNotDecrypt ByteString
   | VersionMismatch
   | InvalidNonce ByteString
+  | MessageOutOfOrder Messages.Phase PlainText
   deriving (Eq, Show)
