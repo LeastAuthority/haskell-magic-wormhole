@@ -50,9 +50,11 @@ library
       MagicWormhole.Internal.ClientProtocol
       MagicWormhole.Internal.FileTransfer
       MagicWormhole.Internal.Messages
+      MagicWormhole.Internal.Pake
       MagicWormhole.Internal.Peer
       MagicWormhole.Internal.Rendezvous
       MagicWormhole.Internal.Sequential
+      MagicWormhole.Internal.Versions
       MagicWormhole.Internal.WebSockets
   default-language: Haskell2010
 
@@ -98,6 +100,7 @@ test-suite tasty
       Generator
       Integration
       Messages
+      Pake
       Sequential
       WebSockets
   default-language: Haskell2010

@@ -31,7 +31,8 @@ import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
 import qualified Crypto.Spake2 as Spake2
 import qualified MagicWormhole.Internal.ClientProtocol as ClientProtocol
 import qualified MagicWormhole.Internal.Messages as Messages
-import qualified MagicWormhole.Internal.Peer as Peer
+import qualified MagicWormhole.Internal.Pake as Pake
+import qualified MagicWormhole.Internal.Versions as Versions
 
 import qualified Paths_magic_wormhole
 
@@ -50,7 +51,7 @@ tests = testSpec "Integration" $ do
         , "--side=" <> theirSide
         ] $ \stdin stdout -> do
           ClientProtocol.SessionKey sessionKey <- withConnection (Messages.AppID appID) (Messages.Side ourSide) stdin stdout $ \conn -> do
-            Right sessionKey <- ClientProtocol.pakeExchange conn password'
+            Right sessionKey <- Pake.pakeExchange conn password'
             pure sessionKey
           -- Calculate the shared key
           theirSpakeKey <- ByteString.hGetLine stdout
@@ -83,10 +84,10 @@ tests = testSpec "Integration" $ do
         , "--code=" <> toS password
         ] $ \stdin stdout -> do
           versions <- withConnection (Messages.AppID appID) (Messages.Side ourSide) stdin stdout $ \conn -> do
-            Right sessionKey <- ClientProtocol.pakeExchange conn password'
-            Right versions <- ClientProtocol.versionExchange conn sessionKey
+            Right sessionKey <- Pake.pakeExchange conn password'
+            Right versions <- Versions.versionExchange conn sessionKey
             pure versions
-          versions `shouldBe` ClientProtocol.Versions
+          versions `shouldBe` Versions.Versions
 
   describe "NaCL interoperability" $
     it "Swaps messages with Python" $ do
@@ -133,14 +134,14 @@ interactWithPython name args action = do
       IO.hSetBuffering stderr IO.LineBuffering
       action stdin stdout `finally` Process.waitForProcess ph
 
-withConnection :: Messages.AppID -> Messages.Side -> Handle -> Handle -> (Peer.Connection -> IO a) -> IO a
+withConnection :: Messages.AppID -> Messages.Side -> Handle -> Handle -> (ClientProtocol.Connection -> IO a) -> IO a
 withConnection appID ourSide stdin stdout action = do
   inChan <- atomically newTChan
-  let connection = Peer.Connection
-                   { Peer.appID = appID
-                   , Peer.ourSide = ourSide
-                   , Peer.send = send
-                   , Peer.receive = readTChan inChan
+  let connection = ClientProtocol.Connection
+                   { ClientProtocol.appID = appID
+                   , ClientProtocol.ourSide = ourSide
+                   , ClientProtocol.send = send
+                   , ClientProtocol.receive = readTChan inChan
                    }
   withAsync (receiveForever inChan) (\_ -> action connection)
   where

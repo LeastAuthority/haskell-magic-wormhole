@@ -3,7 +3,7 @@ module ClientProtocol (tests) where
 
 import Protolude hiding (phase)
 
-import Hedgehog (forAll, property, tripping, (===))
+import Hedgehog (forAll, property, (===))
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 import Test.Tasty (TestTree, testGroup)
@@ -13,11 +13,8 @@ import qualified MagicWormhole.Internal.ClientProtocol as ClientProtocol
 
 
 tests :: IO TestTree
-tests = pure $ testGroup "Peer"
-  [ testProperty "SPAKE2 messages roundtrip" $ property $ do
-      element <- forAll $ Gen.bytes (Range.singleton 32)
-      tripping element ClientProtocol.spakeBytesToMessageBody ClientProtocol.messageBodyToSpakeBytes
-  , testProperty "SecretBox encryption roundtrips" $ property $ do
+tests = pure $ testGroup "ClientProtocol"
+  [ testProperty "SecretBox encryption roundtrips" $ property $ do
       purpose <- forAll $ Gen.bytes (Range.linear 0 10)
       secret <- forAll $ Gen.bytes (Range.linear 0 10)
       let key = ClientProtocol.deriveKey (ClientProtocol.SessionKey secret) purpose
