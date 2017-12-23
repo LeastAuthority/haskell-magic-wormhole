@@ -101,5 +101,6 @@ test-suite tasty
       Integration
       Messages
       Pake
+      Sequential
       WebSockets
   default-language: Haskell2010

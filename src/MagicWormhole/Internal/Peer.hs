@@ -124,8 +124,10 @@ runEncryptedConnection conn action = do
       case msg of
         Left err -> pure $ Left err
         Right msg' -> do
-          atomically $ Sequential.insert (inbound conn) msg'
-          readLoop
+          inserted <- atomically $ Sequential.insert (inbound conn) msg'
+          if inserted
+            then readLoop
+            else pure (Left (uncurry ClientProtocol.MessageOutOfOrder msg'))
 
 -- | Send an encrypted message to the peer.
 --
