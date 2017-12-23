@@ -120,8 +120,8 @@ runEncryptedConnection conn action = do
   where
     readLoop = forever $ do
       msg <- atomically $ ClientProtocol.receiveEncrypted (connection conn) (sharedKey conn)
-      atomically $ Sequential.insert (inbound conn) msg
-
+      inserted <- atomically $ Sequential.insert (inbound conn) msg
+      when inserted $ throwIO (uncurry ClientProtocol.MessageOutOfOrder msg)
 
 -- | Send an encrypted message to the peer.
 --

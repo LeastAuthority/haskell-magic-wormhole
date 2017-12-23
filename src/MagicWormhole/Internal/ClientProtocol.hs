@@ -123,6 +123,7 @@ phasePurpose (Messages.Side side) phase = "wormhole:phase:" <> sideHashDigest <>
 data Error
   = CouldNotDecrypt ByteString
   | InvalidNonce ByteString
+  | MessageOutOfOrder Messages.Phase PlainText
   deriving (Eq, Show, Typeable)
 
 instance Exception Error

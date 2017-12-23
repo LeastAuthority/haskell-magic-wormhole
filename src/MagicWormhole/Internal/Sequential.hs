@@ -44,8 +44,22 @@ sequenceBy rank' initial = Sequential <$> newTVar initial <*> newTVar mempty <*>
 
 -- | Insert an item into the sequence. It may only be drawn from the
 -- sequence with 'next' when its counter is next one.
-insert :: (Enum counter, Hashable counter, Eq counter) => Sequential counter a -> a -> STM ()
-insert sequential msg = modifyTVar' (buffer sequential) (HashMap.insert (rank sequential msg) msg)
+--
+-- If the counter has already been past, don't insert it, since we'll never
+-- reach it. Instead return 'False'.
+insert
+  :: (Ord counter, Enum counter, Hashable counter, Eq counter)
+  => Sequential counter a
+  -> a
+  -> STM Bool
+insert sequential msg = do
+  cur <- readTVar (current sequential)
+  let msgRank = rank sequential msg
+  if msgRank < cur
+    then pure False
+    else do
+    modifyTVar' (buffer sequential) (HashMap.insert (rank sequential msg) msg)
+    pure True
 
 -- | Get and remove the next item from the sequence. This will block until
 -- there is an item with the exact rank we are expecting.

@@ -54,6 +54,7 @@ instance FromJSON Versions where
 data Error
   = ParseError String
   | VersionMismatch
+  | CryptoError ClientProtocol.Error
   deriving (Eq, Show, Typeable)
 
 instance Exception Error
