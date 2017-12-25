@@ -20,7 +20,6 @@ module MagicWormhole.Internal.Rendezvous
     -- * Running a Rendezvous client
   , runClient
   , Session
-  , Error
   ) where
 
 import Protolude hiding (list, phase)
@@ -52,15 +51,6 @@ import qualified Network.WebSockets as WS
 import qualified MagicWormhole.Internal.ClientProtocol as ClientProtocol
 import qualified MagicWormhole.Internal.Messages as Messages
 import MagicWormhole.Internal.WebSockets (WebSocketEndpoint(..))
-
--- TODO: A big problem throughout this code is that exceptions will get raised
--- (by websocket code, when threads are killed due to 'race', etc.), and this
--- means all our error handling gets ignored.
---
--- a) properly understand what's going on
--- b) (probably) either catch things or switch our stuff to exceptions
--- c) try to figure out some testing strategy
-
 
 -- | Abstract type representing a Magic Wormhole session.
 --
@@ -101,36 +91,33 @@ send session msg = do
 -- | Receive a message from a Magic Wormhole Rendezvous server.
 -- Blocks until such a message exists.
 receive :: Session -- ^ An active session. Get this using 'runClient'.
-        -> IO (Either ServerError Messages.ServerMessage) -- ^ Next message from the server.
+        -> IO Messages.ServerMessage -- ^ Next message from the server.
 receive session = do
   -- XXX: I think we need to catch `CloseRequest` here and gracefully stop.
   msg <- WS.receiveData (connection session)
-  case eitherDecode msg of
-    Left err -> do
-      putStrLn @Text $ "[ERROR] " <> show err
-      pure $ Left (ParseError err)
-    Right result -> do
-      putStrLn @Text $ "<<< " <> show result  -- XXX: Debug
-      pure $ Right result
+  either (throwIO . ParseError) pure (eitherDecode msg)
 
 -- | Run a Magic Wormhole Rendezvous client. Use this to interact with a Magic Wormhole server.
 --
--- Will fail with IO (Left ServerError) if the server declares we are unwelcome.
+-- Will throw a 'ServerError' if the server declares we are unwelcome.
 runClient
   :: HasCallStack
   => WebSocketEndpoint -- ^ The websocket to connect to
   -> Messages.AppID -- ^ ID for your application (e.g. example.com/your-application)
   -> Messages.Side -- ^ Identifier for your side
   -> (Session -> IO a) -- ^ Action to perform inside the Magic Wormhole session
-  -> IO (Either ServerError a) -- ^ The result of the action or a ServerError
+  -> IO a -- ^ The result of the action
 runClient (WebSocketEndpoint host port path) appID side app =
-  map join $ Socket.withSocketsDo . WS.runClient host port path $ \ws -> do
+  Socket.withSocketsDo . WS.runClient host port path $ \ws -> do
     session <- atomically $ new ws appID side
-    race (readMessages session) (action session)
+    result <- race (readMessages session) (action session)
+    case result of
+      Left err -> panic $ "Cannot possibly happen: " <> err
+      Right result' -> pure result'
   where
     action session = do
       bind session appID side
-      Right <$> app session
+      app session
 
     -- | Read messages from the websocket forever, or until we fail to handle one.
     readMessages session = do
@@ -138,38 +125,32 @@ runClient (WebSocketEndpoint host port path) appID side app =
       -- the RPC response or forwarding to the mailbox message queue) all in
       -- one transaction. This means that if an exception occurs, the message
       -- will remain in the channel.
-      result <- do
-        msg' <- receive session
-        case msg' of
-          Left parseError -> pure $ Just parseError
-          Right msg -> atomically $ gotMessage session msg
+      msg <- receive session
+      result <- atomically $ gotMessage session msg
       case result of
-        Just err -> do
-          putStrLn @Text $ "[ERROR] " <> show err
-          pure err
+        Just err -> throwIO err
         Nothing -> readMessages session
 
 -- | Make a request to the rendezvous server.
+--
+-- Will throw a 'ClientError' if there's a problem.
 rpc :: HasCallStack
     => Session -- ^ A Magic Wormhole session. Get one using 'runClient'.
     -> Messages.ClientMessage -- ^ The RPC to send. Will fail with an 'Error' if this is not a valid RPC.
-    -> IO (Either Error Messages.ServerMessage) -- ^ Either the result of an RPC, or some sort of error happened.
+    -> IO Messages.ServerMessage -- ^ The result of an RPC
 rpc session req =
   case expectedResponse req of
     Nothing ->
       -- XXX: Pretty sure we can juggle things around at the type level
       -- to remove this check. (i.e. make a type for RPC requests).
-      pure (Left (ClientError (NotAnRPC req)))
+      throwIO (NotAnRPC req)
     Just responseType -> do
-      box' <- atomically $ expectResponse session responseType
-      case box' of
-        Left clientError -> pure (Left (ClientError clientError))
-        Right box -> do
-          send session req
-          response <- atomically $ waitForResponse session responseType box
-          pure $ case response of
-                   Messages.Error reason original -> Left (ClientError (BadRequest reason original))
-                   response' -> Right response'
+      box <- atomically $ expectResponse session responseType
+      send session req
+      response <- atomically $ waitForResponse session responseType box
+      case response of
+        Messages.Error reason original -> throwIO (BadRequest reason original)
+        response' -> pure response'
 
 -- | Set the application ID and side for the rest of this connection.
 --
@@ -184,40 +165,36 @@ bind session appID side' = send session (Messages.Bind appID side')
 --
 -- This is an in-band ping, used mostly for testing. It is not necessary to
 -- keep the connection alive.
-ping :: HasCallStack => Session -> Int -> IO (Either Error Int)
+ping :: HasCallStack => Session -> Int -> IO Int
 ping session n = do
   response <- rpc session (Messages.Ping n)
-  pure $ case response of
-    Left err -> Left err
-    Right (Messages.Pong n') -> Right n'
-    Right unexpected -> unexpectedMessage (Messages.Ping n) unexpected
+  case response of
+    Messages.Pong n' -> pure n'
+    unexpected -> unexpectedMessage (Messages.Ping n) unexpected
 
 -- | List the nameplates on the server.
-list :: HasCallStack => Session -> IO (Either Error [Messages.Nameplate])
+list :: HasCallStack => Session -> IO [Messages.Nameplate]
 list session = do
   response <- rpc session Messages.List
-  pure $ case response of
-    Left err -> Left err
-    Right (Messages.Nameplates nameplates) -> Right nameplates
-    Right unexpected -> unexpectedMessage Messages.List unexpected
+  case response of
+    Messages.Nameplates nameplates -> pure nameplates
+    unexpected -> unexpectedMessage Messages.List unexpected
 
 -- | Allocate a nameplate on the server.
-allocate :: HasCallStack => Session -> IO (Either Error Messages.Nameplate)
+allocate :: HasCallStack => Session -> IO Messages.Nameplate
 allocate session = do
   response <- rpc session Messages.Allocate
-  pure $ case response of
-    Left err -> Left err
-    Right (Messages.Allocated nameplate) -> Right nameplate
-    Right unexpected -> unexpectedMessage Messages.Allocate unexpected
+  case response of
+    Messages.Allocated nameplate -> pure nameplate
+    unexpected -> unexpectedMessage Messages.Allocate unexpected
 
 -- | Claim a nameplate on the server.
-claim :: HasCallStack => Session -> Messages.Nameplate -> IO (Either Error Messages.Mailbox)
+claim :: HasCallStack => Session -> Messages.Nameplate -> IO Messages.Mailbox
 claim session nameplate = do
   response <- rpc session (Messages.Claim nameplate)
-  pure $ case response of
-    Left err -> Left err
-    Right (Messages.Claimed mailbox) -> Right mailbox
-    Right unexpected -> unexpectedMessage (Messages.Claim nameplate) unexpected
+  case response of
+    Messages.Claimed mailbox -> pure mailbox
+    unexpected -> unexpectedMessage (Messages.Claim nameplate) unexpected
 
 -- | Release a nameplate on the server.
 --
@@ -225,13 +202,12 @@ claim session nameplate = do
 --
 -- TODO: Make this impossible to call unless we have already claimed a
 -- namespace.
-release :: HasCallStack => Session -> Maybe Messages.Nameplate -> IO (Either Error ())
+release :: HasCallStack => Session -> Maybe Messages.Nameplate -> IO ()
 release session nameplate' = do
   response <- rpc session (Messages.Release nameplate')
-  pure $ case response of
-    Left err -> Left err
-    Right Messages.Released -> Right ()
-    Right unexpected -> unexpectedMessage (Messages.Release nameplate') unexpected
+  case response of
+    Messages.Released -> pure ()
+    unexpected -> unexpectedMessage (Messages.Release nameplate') unexpected
 
 -- | Open a mailbox on the server.
 --
@@ -250,13 +226,12 @@ open session mailbox = do
                                  }
 
 -- | Close a mailbox on the server.
-close :: HasCallStack => Session -> Maybe Messages.Mailbox -> Maybe Messages.Mood -> IO (Either Error ())
+close :: HasCallStack => Session -> Maybe Messages.Mailbox -> Maybe Messages.Mood -> IO ()
 close session mailbox' mood' = do
   response <- rpc session (Messages.Close mailbox' mood')
-  pure $ case response of
-    Left err -> Left err
-    Right Messages.Closed -> Right ()
-    Right unexpected -> unexpectedMessage (Messages.Close mailbox' mood') unexpected
+  case response of
+    Messages.Closed -> pure ()
+    unexpected -> unexpectedMessage (Messages.Close mailbox' mood') unexpected
 
 -- | Send a message to the open mailbox.
 --
@@ -297,16 +272,16 @@ unexpectedMessage request response = panic $ "Unexpected message: " <> show resp
 
 -- | Tell the connection that we expect a response of the given type.
 --
--- Will fail with a 'ClientError' if we are already expecting a response of this type.
-expectResponse :: Session -> ResponseType -> STM (Either ClientError (TMVar Messages.ServerMessage))
+-- Will throw a 'ClientError' if we are already expecting a response of this type.
+expectResponse :: Session -> ResponseType -> STM (TMVar Messages.ServerMessage)
 expectResponse session responseType = do
   pending <- readTVar (pendingVar session)
   case HashMap.lookup responseType pending of
     Nothing -> do
       box <- newEmptyTMVar
       writeTVar (pendingVar session) (HashMap.insert responseType box pending)
-      pure (Right box)
-    Just _ -> pure (Left (AlreadySent responseType))
+      pure box
+    Just _ -> throwSTM (AlreadySent responseType)
 
 waitForResponse :: Session -> ResponseType -> TMVar Messages.ServerMessage -> STM Messages.ServerMessage
 waitForResponse session responseType box = do
@@ -413,7 +388,9 @@ data ServerError
   | Unwelcome Text
     -- | We couldn't understand the message from the server.
   | ParseError String
-  deriving (Eq, Show)
+  deriving (Eq, Show, Typeable)
+
+instance Exception ServerError
 
 -- | Error caused by misusing the client.
 data ClientError
@@ -424,11 +401,6 @@ data ClientError
   | NotAnRPC Messages.ClientMessage
     -- | We sent a message that the server could not understand.
   | BadRequest Text Messages.ClientMessage
-  deriving (Eq, Show)
+  deriving (Eq, Show, Typeable)
 
--- | Any possible dispatch error.
-data Error
-  = -- | An error due to misusing the client.
-    ClientError ClientError
-    -- | An error due to weird message from the server.
-  | ServerError ServerError deriving (Eq, Show)
+instance Exception ClientError

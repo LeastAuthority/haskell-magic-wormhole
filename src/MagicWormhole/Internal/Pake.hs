@@ -1,5 +1,6 @@
 module MagicWormhole.Internal.Pake
   ( pakeExchange
+  , Error(..)
   -- * Exported for testing
   , spakeBytesToMessageBody
   , messageBodyToSpakeBytes
@@ -21,10 +22,15 @@ import qualified MagicWormhole.Internal.Messages as Messages
 import qualified MagicWormhole.Internal.ClientProtocol as ClientProtocol
 
 -- | Exchange SPAKE2 keys with a Magic Wormhole peer.
-pakeExchange :: ClientProtocol.Connection -> Spake2.Password -> IO (Either (Spake2.MessageError Text) ClientProtocol.SessionKey)
+--
+-- Throws an 'Error' if we cannot parse the incoming message.
+pakeExchange :: ClientProtocol.Connection -> Spake2.Password -> IO ClientProtocol.SessionKey
 pakeExchange conn password = do
   let protocol = wormholeSpakeProtocol (ClientProtocol.appID conn)
-  second ClientProtocol.SessionKey <$> Spake2.spake2Exchange protocol password sendPakeMessage (atomically receivePakeMessage)
+  result <- Spake2.spake2Exchange protocol password sendPakeMessage (atomically receivePakeMessage)
+  case result of
+    Left err -> throwIO (Error err)
+    Right key -> pure (ClientProtocol.SessionKey key)
   where
     sendPakeMessage = ClientProtocol.send conn Messages.PakePhase . spakeBytesToMessageBody
     receivePakeMessage  = do
@@ -67,3 +73,5 @@ wormholeSpakeProtocol (Messages.AppID appID') =
 -- | The version of the SPAKE2 protocol used by Magic Wormhole.
 type Spake2Protocol = Spake2.Protocol Ed25519 SHA256
 
+newtype Error = Error (Spake2.MessageError Text) deriving (Eq, Show, Typeable)
+instance Exception Error
