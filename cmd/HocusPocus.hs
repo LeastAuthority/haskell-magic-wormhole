@@ -52,18 +52,29 @@ commandParser = Opt.hsubparser $
 makeOptions :: Text -> Opt.Parser a -> Opt.ParserInfo a
 makeOptions headerText parser = Opt.info (Opt.helper <*> parser) (Opt.fullDesc <> Opt.header (toS headerText))
 
--- | Execute 'Command' against a Wormhole Rendezvous server.
-app :: Command -> Rendezvous.Session -> IO Int
-app command session = do
-  print command
+-- | A password used to exchange with a Magic Wormhole peer.
+--
+-- XXX: Just picking ByteString because that's the least amount of work. Need
+-- to look up exact type of password in the magic-wormhole docs.
+type Password = ByteString
+
+-- | Send a text message to a Magic Wormhole peer.
+sendText :: Rendezvous.Session -> Password -> Text -> IO ()
+sendText session password message = do
   nameplate <- Rendezvous.allocate session
   mailbox <- Rendezvous.claim session nameplate
   peer <- Rendezvous.open session mailbox  -- XXX: We should run `close` in the case of exceptions?
   let (Messages.Nameplate n) = nameplate
-  Peer.withEncryptedConnection peer (Spake2.makePassword (toS n <> "-potato"))
+  Peer.withEncryptedConnection peer (Spake2.makePassword (toS n <> "-" <> password))
     (\conn -> do
-        let offer = FileTransfer.Message "Brave new world that has such offers in it"
+        let offer = FileTransfer.Message message
         Peer.sendMessage conn (toS (Aeson.encode offer)))
+
+-- | Execute 'Command' against a Wormhole Rendezvous server.
+app :: Command -> Rendezvous.Session -> IO Int
+app command session = do
+  print command
+  sendText session "potato" "Brave new world that has such offers in it"
   pure 42
 
 main :: IO ()
