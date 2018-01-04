@@ -80,8 +80,8 @@ app command session = do
 main :: IO ()
 main = do
   options <- Opt.execParser (makeOptions "hocus-pocus - summon and traverse magic wormholes" optionsParser)
+  side <- Messages.generateSide
   result <- Rendezvous.runClient (rendezvousEndpoint options) appID side (app (cmd options))
   print result
   where
     appID = Messages.AppID "jml.io/hocus-pocus"
-    side = Messages.Side "treebeard"
