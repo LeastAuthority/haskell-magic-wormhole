@@ -1,4 +1,3 @@
-{-# LANGUAGE TupleSections #-}
 -- | Interface for communicating with a Magic Wormhole peer.
 --
 -- Build on this to write an application that uses Magic Wormhole.
@@ -10,7 +9,6 @@ module MagicWormhole.Internal.Peer
   , ClientProtocol.Connection
   , ClientProtocol.SessionKey
   , ClientProtocol.PlainText
-  , Error(..)
   ) where
 
 import Protolude hiding (phase)
@@ -22,7 +20,6 @@ import Control.Concurrent.STM.TVar
   , readTVar
   )
 import qualified Crypto.Spake2 as Spake2
-import Data.String (String)
 
 import qualified MagicWormhole.Internal.ClientProtocol as ClientProtocol
 import qualified MagicWormhole.Internal.Messages as Messages
@@ -144,11 +141,3 @@ sendMessage conn body = do
 -- Obtain an 'EncryptedConnection' with 'withEncryptedConnection'.
 receiveMessage :: EncryptedConnection -> STM ClientProtocol.PlainText
 receiveMessage conn = snd <$> Sequential.next (inbound conn)
-
-
-data Error
-  = ParseError String
-  | ProtocolError (Spake2.MessageError Text)
-  | VersionsError Versions.Error
-  | CryptoError ClientProtocol.Error
-  deriving (Eq, Show)
