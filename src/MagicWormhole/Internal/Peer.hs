@@ -43,8 +43,7 @@ establishEncryption :: ClientProtocol.Connection -> Spake2.Password -> IO Encryp
 establishEncryption peer password = do
   key <- Pake.pakeExchange peer password
   void $ Versions.versionExchange peer key
-  conn <- liftIO $ atomically $ newEncryptedConnection peer key
-  pure conn
+  liftIO $ atomically $ newEncryptedConnection peer key
 
 -- | Run an action that communicates with a Magic Wormhole peer through an
 -- encrypted connection.
@@ -118,7 +117,7 @@ runEncryptedConnection conn action = do
     readLoop = forever $ do
       msg <- atomically $ ClientProtocol.receiveEncrypted (connection conn) (sharedKey conn)
       inserted <- atomically $ Sequential.insert (inbound conn) msg
-      when inserted $ throwIO (uncurry ClientProtocol.MessageOutOfOrder msg)
+      unless inserted $ throwIO (uncurry ClientProtocol.MessageOutOfOrder msg)
 
 -- | Send an encrypted message to the peer.
 --

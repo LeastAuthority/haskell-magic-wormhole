@@ -71,6 +71,7 @@ executable hocus-pocus
     , magic-wormhole
     , optparse-applicative
     , spake2 >= 0.4
+    , text
   default-language: Haskell2010
 
 test-suite tasty
