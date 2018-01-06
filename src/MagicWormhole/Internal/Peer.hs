@@ -1,3 +1,4 @@
+{-# OPTIONS_HADDOCK not-home #-}
 -- | Interface for communicating with a Magic Wormhole peer.
 --
 -- Build on this to write an application that uses Magic Wormhole.
@@ -6,9 +7,6 @@ module MagicWormhole.Internal.Peer
   , withEncryptedConnection
   , sendMessage
   , receiveMessage
-  , ClientProtocol.Connection
-  , ClientProtocol.SessionKey
-  , ClientProtocol.PlainText
   ) where
 
 import Protolude hiding (phase)

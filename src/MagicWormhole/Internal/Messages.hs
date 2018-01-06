@@ -1,3 +1,4 @@
+{-# OPTIONS_HADDOCK not-home #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 -- | Messages sent to and from the Rendezvous server.
 module MagicWormhole.Internal.Messages

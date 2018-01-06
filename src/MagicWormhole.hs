@@ -1,3 +1,5 @@
+-- |
+-- Description : A Magic Wormhole client.
 module MagicWormhole
   ( Messages.Nameplate(..)
   , Messages.AppID(..)

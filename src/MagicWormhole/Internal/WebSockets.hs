@@ -1,3 +1,4 @@
+{-# OPTIONS_HADDOCK not-home #-}
 -- | Help interaction with websockets.
 module MagicWormhole.Internal.WebSockets
   ( WebSocketEndpoint(..)

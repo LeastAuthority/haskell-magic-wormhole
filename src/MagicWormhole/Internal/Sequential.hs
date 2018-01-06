@@ -1,3 +1,4 @@
+{-# OPTIONS_HADDOCK not-home #-}
 -- | Helpers for processing messages in sequence.
 module MagicWormhole.Internal.Sequential
   ( Sequential

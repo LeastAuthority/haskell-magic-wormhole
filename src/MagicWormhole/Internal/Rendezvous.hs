@@ -1,3 +1,4 @@
+{-# OPTIONS_HADDOCK not-home #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE NamedFieldPuns #-}
