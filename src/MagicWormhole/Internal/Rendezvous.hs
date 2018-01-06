@@ -83,17 +83,13 @@ new connection appID side
 send :: Session -- ^ An active session. Get this using 'runClient'.
      -> Messages.ClientMessage -- ^ Message to send to the server.
      -> IO ()
--- XXX: I think this needs to use `sendClose` when the message is Close.
-send session msg = do
-  WS.sendBinaryData (connection session) (encode msg)
-  putStrLn @Text $ ">>> " <> show msg -- XXX: Debug
+send session msg = WS.sendBinaryData (connection session) (encode msg)
 
 -- | Receive a message from a Magic Wormhole Rendezvous server.
 -- Blocks until such a message exists.
 receive :: Session -- ^ An active session. Get this using 'runClient'.
         -> IO Messages.ServerMessage -- ^ Next message from the server.
 receive session = do
-  -- XXX: I think we need to catch `CloseRequest` here and gracefully stop.
   msg <- WS.receiveData (connection session)
   either (throwIO . ParseError) pure (eitherDecode msg)
 
@@ -236,8 +232,6 @@ close session mailbox' mood' = do
     unexpected -> unexpectedMessage (Messages.Close mailbox' mood') unexpected
 
 -- | Send a message to the open mailbox.
---
--- XXX: Should we provide a version that blocks until the message comes back to us?
 add :: HasCallStack => Session -> Messages.Phase -> Messages.Body -> IO ()
 add session phase body = send session (Messages.Add phase body)
 
