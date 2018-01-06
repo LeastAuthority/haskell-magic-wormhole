@@ -47,6 +47,7 @@ library
     , unordered-containers
     , websockets
   exposed-modules:
+      MagicWormhole
       MagicWormhole.Internal.ClientProtocol
       MagicWormhole.Internal.FileTransfer
       MagicWormhole.Internal.Messages
