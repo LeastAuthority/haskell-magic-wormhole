@@ -63,7 +63,6 @@ module MagicWormhole
   , Peer.sendMessage
   , Peer.receiveMessage
   , ClientProtocol.PlainText(..)
-  , ClientProtocol.CipherText(..)
     -- * Magic Wormhole applications
     --
     -- | Once you've established an 'Peer.EncryptedConnection' to your peer, the world is your oyster.

@@ -12,9 +12,9 @@ module MagicWormhole.Internal.ClientProtocol
   , Error(..)
   , sendEncrypted
   , receiveEncrypted
-  , CipherText(..)
   , PlainText(..)
   -- * Exported for testing
+  , CipherText(..)
   , decrypt
   , encrypt
   , deriveKey
