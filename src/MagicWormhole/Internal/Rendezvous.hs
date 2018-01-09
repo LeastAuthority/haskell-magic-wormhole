@@ -21,6 +21,9 @@ module MagicWormhole.Internal.Rendezvous
     -- * Running a Rendezvous client
   , runClient
   , Session
+    -- * Errors
+  , ServerError(..)
+  , ClientError(..)
   ) where
 
 import Protolude hiding (list, phase)

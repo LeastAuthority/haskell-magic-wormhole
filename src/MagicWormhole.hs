@@ -44,6 +44,9 @@ module MagicWormhole
   , Messages.Mailbox(..)
   , Rendezvous.open
   , Rendezvous.close
+    -- ** Errors
+  , Rendezvous.ServerError(..)
+  , Rendezvous.ClientError(..)
     -- * Peer-to-peer
     --
     -- | Opening a 'Messgaes.Mailbox' shared with a peer gets you a 'ClientProtocol.Connection',
