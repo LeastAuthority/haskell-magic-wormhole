@@ -67,6 +67,8 @@ withEncryptedConnection peer password action = do
 
 -- | A Magic Wormhole peer-to-peer application session.
 --
+-- Construct one of these using 'withEncryptedConnection'.
+--
 -- You get one of these after you have found a peer, successfully negotatiated
 -- a shared key, and verified that negotiation by exchanging versions. (Note
 -- that this does not include the "verifying" step mentioned in
