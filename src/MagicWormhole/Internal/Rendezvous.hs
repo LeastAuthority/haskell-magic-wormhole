@@ -147,12 +147,27 @@ rpc session req =
       -- to remove this check. (i.e. make a type for RPC requests).
       throwIO (NotAnRPC req)
     Just responseType -> do
-      box <- atomically $ expectResponse session responseType
+      box <- atomically $ expectResponse responseType
       send session req
       response <- atomically $ waitForResponse session responseType box
       case response of
         Messages.Error reason original -> throwIO (BadRequest reason original)
         response' -> pure response'
+
+  where
+    -- | Tell the connection that we expect a response of the given type.
+    --
+    -- Will throw a 'ClientError' if we are already expecting a response of this type.
+    expectResponse :: ResponseType -> STM (TMVar Messages.ServerMessage)
+    expectResponse responseType = do
+      pending <- readTVar (pendingVar session)
+      case HashMap.lookup responseType pending of
+        Nothing -> do
+          box <- newEmptyTMVar
+          writeTVar (pendingVar session) (HashMap.insert responseType box pending)
+          pure box
+        Just _ -> throwSTM (AlreadySent req)
+
 
 -- | Set the application ID and side for the rest of this connection.
 --
@@ -284,19 +299,6 @@ readFromMailbox' session = readTQueue (messageChan session)
 unexpectedMessage :: HasCallStack => Messages.ClientMessage -> Messages.ServerMessage -> a
 unexpectedMessage request response = panic $ "Unexpected message: " <> show response <> ", in response to: " <> show request
 
--- | Tell the connection that we expect a response of the given type.
---
--- Will throw a 'ClientError' if we are already expecting a response of this type.
-expectResponse :: Session -> ResponseType -> STM (TMVar Messages.ServerMessage)
-expectResponse session responseType = do
-  pending <- readTVar (pendingVar session)
-  case HashMap.lookup responseType pending of
-    Nothing -> do
-      box <- newEmptyTMVar
-      writeTVar (pendingVar session) (HashMap.insert responseType box pending)
-      pure box
-    Just _ -> throwSTM (AlreadySent responseType)
-
 waitForResponse :: Session -> ResponseType -> TMVar Messages.ServerMessage -> STM Messages.ServerMessage
 waitForResponse session responseType box = do
   response <- takeTMVar box
@@ -310,7 +312,7 @@ gotResponse :: Session -> ResponseType -> Messages.ServerMessage -> STM (Maybe S
 gotResponse session responseType message = do
   pending <- readTVar (pendingVar session)
   case HashMap.lookup responseType pending of
-    Nothing -> pure (Just (ResponseWithoutRequest responseType message))
+    Nothing -> pure (Just (ResponseWithoutRequest message))
     Just box -> do
       -- TODO: This will block processing messages from the server (by
       -- retrying the transaction) if the box is already populated (i.e. if we
@@ -391,7 +393,7 @@ expectedResponse Messages.Ping{} = Just PongResponse
 -- | Error due to weirdness from the server.
 data ServerError
   = -- | Server sent us a response for something that we hadn't requested.
-    ResponseWithoutRequest ResponseType Messages.ServerMessage
+    ResponseWithoutRequest Messages.ServerMessage
     -- | We were sent a message other than "Welcome" on connect, or a
     -- "Welcome" message at any other time.
   | UnexpectedMessage Messages.ServerMessage
@@ -410,7 +412,7 @@ instance Exception ServerError
 data ClientError
   = -- | We tried to do an RPC while another RPC with the same response type
     -- was in flight. See warner/magic-wormhole#260 for details.
-    AlreadySent ResponseType
+    AlreadySent Messages.ClientMessage
     -- | Tried to send a non-RPC as if it were an RPC (i.e. expecting a response).
   | NotAnRPC Messages.ClientMessage
     -- | We sent a message that the server could not understand.
