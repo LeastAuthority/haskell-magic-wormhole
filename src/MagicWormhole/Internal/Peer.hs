@@ -49,6 +49,12 @@ establishEncryption peer password = do
 -- Does the "pake" and "version" exchanges necessary to negotiate an encrypted
 -- connection and then runs the user-provided action. This action can then use
 -- 'sendMessage' and 'receiveMessage' to send & receive messages from its peer.
+--
+-- Can throw:
+--
+--   * 'ClientProtocol.Error', when we receive nonsensical data from the other peer
+--   * 'Pake.Error', when SPAKE2 cryptography fails
+--   * 'Versions.Error', when we cannot agree on shared capabilities (this can sometimes imply SPAKE2 cryptography failure)
 withEncryptedConnection
   :: ClientProtocol.Connection  -- ^ Underlying to a peer. Get this with 'Rendezvous.open'.
   -> Spake2.Password  -- ^ The shared password that is the basis of the encryption. Construct with 'Spake2.makePassword'.

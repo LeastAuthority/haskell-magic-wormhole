@@ -58,10 +58,10 @@ import MagicWormhole.Internal.WebSockets (WebSocketEndpoint(..))
 
 -- | Abstract type representing a Magic Wormhole session.
 --
--- - 'runClient' gets a session
--- - 'rpc' sends RPCs from inside 'runClient'
--- - 'send' sends non-RPC messages (e.g. `bind`)
--- - 'readFromMailbox' reads messages from the mailbox
+-- Use 'runClient' to get a 'Session' on the Magic Wormhole Rendezvous server.
+-- Once you have a 'Session',
+-- use 'ping', 'list', 'allocate', 'claim', 'release', 'open', and 'close'
+-- to communicate with the Rendezvous server.
 data Session
   = Session
   { connection :: WS.Connection
@@ -167,6 +167,8 @@ bind session appID side' = send session (Messages.Bind appID side')
 --
 -- This is an in-band ping, used mostly for testing. It is not necessary to
 -- keep the connection alive.
+--
+-- Throws a 'ClientError' if the server rejects the message for any reason.
 ping :: HasCallStack => Session -> Int -> IO Int
 ping session n = do
   response <- rpc session (Messages.Ping n)
@@ -175,6 +177,8 @@ ping session n = do
     unexpected -> unexpectedMessage (Messages.Ping n) unexpected
 
 -- | List the nameplates on the server.
+--
+-- Throws a 'ClientError' if the server rejects the message for any reason.
 list :: HasCallStack => Session -> IO [Messages.Nameplate]
 list session = do
   response <- rpc session Messages.List
@@ -183,6 +187,8 @@ list session = do
     unexpected -> unexpectedMessage Messages.List unexpected
 
 -- | Allocate a nameplate on the server.
+--
+-- Throws a 'ClientError' if the server rejects the message for any reason.
 allocate :: HasCallStack => Session -> IO Messages.Nameplate
 allocate session = do
   response <- rpc session Messages.Allocate
@@ -191,6 +197,8 @@ allocate session = do
     unexpected -> unexpectedMessage Messages.Allocate unexpected
 
 -- | Claim a nameplate on the server.
+--
+-- Throws a 'ClientError' if the server rejects the message for any reason.
 claim :: HasCallStack => Session -> Messages.Nameplate -> IO Messages.Mailbox
 claim session nameplate = do
   response <- rpc session (Messages.Claim nameplate)
@@ -204,6 +212,8 @@ claim session nameplate = do
 --
 -- TODO: Make this impossible to call unless we have already claimed a
 -- namespace.
+--
+-- Throws a 'ClientError' if the server rejects the message for any reason.
 release :: HasCallStack => Session -> Maybe Messages.Nameplate -> IO ()
 release session nameplate' = do
   response <- rpc session (Messages.Release nameplate')
@@ -228,6 +238,8 @@ open session mailbox = do
                                  }
 
 -- | Close a mailbox on the server.
+--
+-- Throws a 'ClientError' if the server rejects the message for any reason.
 close :: HasCallStack => Session -> Maybe Messages.Mailbox -> Maybe Messages.Mood -> IO ()
 close session mailbox' mood' = do
   response <- rpc session (Messages.Close mailbox' mood')
