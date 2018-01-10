@@ -8,7 +8,7 @@
 module MagicWormhole.Internal.Versions
     ( versionExchange
     , Versions(..)
-    , Error(..)
+    , VersionsError(..)
     ) where
 
 import Protolude hiding (phase)
@@ -66,7 +66,7 @@ instance FromJSON Versions where
   parseJSON unknown = typeMismatch "Versions" unknown
 
 -- | An error occurred during 'versionExchange'.
-data Error
+data VersionsError
   -- | We could not interpret the other side's version information
   = ParseError String
   -- | The other side sent us version information, but it does not match ours,
@@ -74,4 +74,4 @@ data Error
   | VersionMismatch
   deriving (Eq, Show, Typeable)
 
-instance Exception Error
+instance Exception VersionsError

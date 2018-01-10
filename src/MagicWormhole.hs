@@ -59,6 +59,10 @@ module MagicWormhole
   , Peer.withEncryptedConnection
   , ClientProtocol.Connection
   , Peer.EncryptedConnection
+    -- *** Errors
+  , ClientProtocol.PeerError
+  , Versions.VersionsError
+  , Pake.PakeError
     -- ** Communicating with a peer
   , Peer.sendMessage
   , Peer.receiveMessage
@@ -76,6 +80,8 @@ module MagicWormhole
 import qualified MagicWormhole.Internal.ClientProtocol as ClientProtocol
 import qualified MagicWormhole.Internal.FileTransfer as FileTransfer
 import qualified MagicWormhole.Internal.Messages as Messages
-import qualified MagicWormhole.Internal.Rendezvous as Rendezvous
+import qualified MagicWormhole.Internal.Pake as Pake
 import qualified MagicWormhole.Internal.Peer as Peer
+import qualified MagicWormhole.Internal.Rendezvous as Rendezvous
+import qualified MagicWormhole.Internal.Versions as Versions
 import qualified MagicWormhole.Internal.WebSockets as WebSockets

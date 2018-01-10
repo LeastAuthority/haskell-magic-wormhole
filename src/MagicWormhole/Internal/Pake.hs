@@ -8,7 +8,7 @@
 -- 'pakeExchange' has the logic for doing this.
 module MagicWormhole.Internal.Pake
   ( pakeExchange
-  , Error(..)
+  , PakeError(..)
   -- * Exported for testing
   , spakeBytesToMessageBody
   , messageBodyToSpakeBytes
@@ -88,5 +88,5 @@ wormholeSpakeProtocol (Messages.AppID appID') =
 type Spake2Protocol = Spake2.Protocol Ed25519 SHA256
 
 -- | An error that occured during 'pakeExchange'.
-newtype Error = Error (Spake2.MessageError Text) deriving (Eq, Show, Typeable)
-instance Exception Error
+newtype PakeError = Error (Spake2.MessageError Text) deriving (Eq, Show, Typeable)
+instance Exception PakeError

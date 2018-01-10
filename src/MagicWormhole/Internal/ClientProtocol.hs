@@ -9,7 +9,7 @@
 module MagicWormhole.Internal.ClientProtocol
   ( Connection(..)
   , SessionKey(..)
-  , Error(..)
+  , PeerError(..)
   , sendEncrypted
   , receiveEncrypted
   , PlainText(..)
@@ -93,7 +93,7 @@ encrypt key (PlainText message) = do
   pure . CipherText $ Saltine.encode nonce <> ciphertext
 
 -- | Decrypt a 'MailboxMessage' using 'SecretBox'. Derives the key from the phase.
-decryptMessage :: SessionKey -> Messages.MailboxMessage -> Either Error (Messages.Phase, PlainText)
+decryptMessage :: SessionKey -> Messages.MailboxMessage -> Either PeerError (Messages.Phase, PlainText)
 decryptMessage key message =
   let Messages.Body ciphertext = Messages.body message
   in (Messages.phase message,) <$> decrypt (derivedKey message) (CipherText ciphertext)
@@ -102,7 +102,7 @@ decryptMessage key message =
 
 -- | Decrypt a message using 'SecretBox'. Get the key from 'deriveKey'.
 -- Encrypted using 'encrypt'.
-decrypt :: SecretBox.Key -> CipherText -> Either Error PlainText
+decrypt :: SecretBox.Key -> CipherText -> Either PeerError PlainText
 decrypt key (CipherText ciphertext) = do
   let (nonce', ciphertext') = ByteString.splitAt ByteSizes.secretBoxNonce ciphertext
   nonce <- note (InvalidNonce nonce') $ Saltine.decode nonce'
@@ -141,7 +141,7 @@ phasePurpose (Messages.Side side) phase = "wormhole:phase:" <> sideHashDigest <>
     hashDigest thing = ByteArray.convert (hashWith SHA256 thing)
 
 -- | Something that went wrong with the client protocol.
-data Error
+data PeerError
   -- | We received a message from the other side that we could not decrypt
   = CouldNotDecrypt ByteString
   -- | We could not determine the SecretBox nonce from the message we received
@@ -150,4 +150,4 @@ data Error
   | MessageOutOfOrder Messages.Phase PlainText
   deriving (Eq, Show, Typeable)
 
-instance Exception Error
+instance Exception PeerError
