@@ -18,6 +18,7 @@ module MagicWormhole.Internal.ClientProtocol
   , decrypt
   , encrypt
   , deriveKey
+  , Purpose
   , phasePurpose
   ) where
 

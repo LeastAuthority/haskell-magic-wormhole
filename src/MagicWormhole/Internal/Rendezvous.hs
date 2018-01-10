@@ -156,7 +156,7 @@ rpc session req =
 
 -- | Set the application ID and side for the rest of this connection.
 --
--- The Rendezvous protocol doesn't have a response to 'bind', so there's no
+-- The Rendezvous protocol doesn't have a response to @bind@, so there's no
 -- way to tell if it has had its effect.
 --
 -- See https://github.com/warner/magic-wormhole/issues/261
@@ -276,7 +276,7 @@ readFromMailbox' session = readTQueue (messageChan session)
 -- | Called when an RPC receives a message as a response that does not match
 -- the request.
 --
--- As things are written, this should never happen, because 'gotResponse'
+-- As things are written, this should never happen, because @gotResponse@
 -- makes sure we only ever populate the response placeholder with something
 -- that matches.
 --

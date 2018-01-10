@@ -104,7 +104,7 @@ newEncryptedConnection conn sessionKey = EncryptedConnection conn sessionKey <$>
 -- | Take a successfully negotiated peer connection and run an action that
 -- sends and receives encrypted messages.
 --
--- Establish an encrypted connection using 'establishEncryption'.
+-- Establish an encrypted connection using 'withEncryptedConnection'.
 --
 -- Use this to communicate with a Magic Wormhole peer.
 --

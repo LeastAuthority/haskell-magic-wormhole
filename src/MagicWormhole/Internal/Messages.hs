@@ -275,7 +275,7 @@ instance ToJSON ClientMessage where
 --
 -- Recommendation is to use "$DNSNAME/$APPNAME", e.g.
 -- the Python `wormhole` command-line tool uses
--- @lothar.com/wormhole/text-or-file-xfer@.
+-- @lothar.com\/wormhole\/text-or-file-xfer@.
 newtype AppID = AppID Text deriving (Eq, Show, FromJSON, ToJSON)
 
 -- | Short string used to differentiate between echoes of our own messages and
