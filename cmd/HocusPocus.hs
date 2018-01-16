@@ -50,7 +50,7 @@ commandParser :: Opt.Parser Command
 commandParser = Opt.hsubparser $
   Opt.command "send" (Opt.info (pure Send) (Opt.progDesc "Send a text message, file, or directory")) <>
   Opt.command "receive" (Opt.info (pure Receive) (Opt.progDesc "Receive a text message, file, or directory")) <>
-  Opt.command "bounce" (Opt.info (pure Bounce) (Opt.progDesc "Bounce a message to and from a server (i.e. send and receive)"))
+  Opt.command "bounce" (Opt.info (pure Bounce) (Opt.progDesc "Send and receive a message through a server"))
 
 makeOptions :: Text -> Opt.Parser a -> Opt.ParserInfo a
 makeOptions headerText parser = Opt.info (Opt.helper <*> parser) (Opt.fullDesc <> Opt.header (toS headerText))
