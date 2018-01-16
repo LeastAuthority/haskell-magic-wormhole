@@ -1,4 +1,3 @@
-{-# LANGUAGE TupleSections #-}
 -- | Interface for communicating with a Magic Wormhole peer.
 --
 -- Build on this to write an application that uses Magic Wormhole.
@@ -10,7 +9,6 @@ module MagicWormhole.Internal.Peer
   , ClientProtocol.Connection
   , ClientProtocol.SessionKey
   , ClientProtocol.PlainText
-  , Error(..)
   ) where
 
 import Protolude hiding (phase)
@@ -22,7 +20,6 @@ import Control.Concurrent.STM.TVar
   , readTVar
   )
 import qualified Crypto.Spake2 as Spake2
-import Data.String (String)
 
 import qualified MagicWormhole.Internal.ClientProtocol as ClientProtocol
 import qualified MagicWormhole.Internal.Messages as Messages
@@ -46,8 +43,7 @@ establishEncryption :: ClientProtocol.Connection -> Spake2.Password -> IO Encryp
 establishEncryption peer password = do
   key <- Pake.pakeExchange peer password
   void $ Versions.versionExchange peer key
-  conn <- liftIO $ atomically $ newEncryptedConnection peer key
-  pure conn
+  liftIO $ atomically $ newEncryptedConnection peer key
 
 -- | Run an action that communicates with a Magic Wormhole peer through an
 -- encrypted connection.
@@ -121,7 +117,7 @@ runEncryptedConnection conn action = do
     readLoop = forever $ do
       msg <- atomically $ ClientProtocol.receiveEncrypted (connection conn) (sharedKey conn)
       inserted <- atomically $ Sequential.insert (inbound conn) msg
-      when inserted $ throwIO (uncurry ClientProtocol.MessageOutOfOrder msg)
+      unless inserted $ throwIO (uncurry ClientProtocol.MessageOutOfOrder msg)
 
 -- | Send an encrypted message to the peer.
 --
@@ -144,11 +140,3 @@ sendMessage conn body = do
 -- Obtain an 'EncryptedConnection' with 'withEncryptedConnection'.
 receiveMessage :: EncryptedConnection -> STM ClientProtocol.PlainText
 receiveMessage conn = snd <$> Sequential.next (inbound conn)
-
-
-data Error
-  = ParseError String
-  | ProtocolError (Spake2.MessageError Text)
-  | VersionsError Versions.Error
-  | CryptoError ClientProtocol.Error
-  deriving (Eq, Show)

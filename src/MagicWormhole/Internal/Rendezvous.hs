@@ -250,6 +250,8 @@ add session phase body = send session (Messages.Add phase body)
 readFromMailbox :: HasCallStack => Session -> STM Messages.MailboxMessage
 readFromMailbox session = do
   msg <- readFromMailbox' session
+  -- In the unlikely event that the other actual side has chosen the same side
+  -- ID as us, this will loop forever.
   if Messages.side msg == sessionSide session
     then readFromMailbox session
     else pure msg

@@ -45,6 +45,7 @@ executables:
       - magic-wormhole
       - optparse-applicative
       - spake2 >= 0.4
+      - text
 
 tests:
   tasty:

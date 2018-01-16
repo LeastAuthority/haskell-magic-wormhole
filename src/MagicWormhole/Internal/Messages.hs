@@ -8,6 +8,7 @@ module MagicWormhole.Internal.Messages
   , WelcomeMessage(..)
   , MessageID(..)
   , Side(..)
+  , generateSide
   , Phase(..)
   , phaseName
   , Body(..)
@@ -19,6 +20,7 @@ module MagicWormhole.Internal.Messages
 import Protolude
 
 import Control.Monad (fail)
+import Crypto.Random (MonadRandom(..))
 import Data.Aeson
   ( FromJSON(..)
   , ToJSON(..)
@@ -281,6 +283,12 @@ newtype AppID = AppID Text deriving (Eq, Show, FromJSON, ToJSON)
 -- TODO: This needs to be cleanly encoded to ASCII, so update the type or
 -- provide a smart constructor.
 newtype Side = Side Text deriving (Eq, Show, FromJSON, ToJSON)
+
+-- | Generate a random 'Side'
+generateSide :: MonadRandom randomly => randomly Side
+generateSide = do
+  randomBytes <- getRandomBytes 5
+  pure . Side . toS @ByteString . convertToBase Base16 $ (randomBytes :: ByteString)
 
 -- | How the client feels. Reported by the client to the server at the end of
 -- a wormhole session.

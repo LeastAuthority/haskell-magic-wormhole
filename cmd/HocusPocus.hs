@@ -10,6 +10,7 @@ import qualified Options.Applicative as Opt
 
 import qualified Crypto.Spake2 as Spake2
 import qualified Data.Aeson as Aeson
+import qualified Data.Text as Text
 import qualified MagicWormhole.Internal.FileTransfer as FileTransfer
 import qualified MagicWormhole.Internal.Messages as Messages
 import qualified MagicWormhole.Internal.Peer as Peer
@@ -42,35 +43,95 @@ optionsParser
 data Command
   = Send
   | Receive
+  | Bounce  -- Send and receive to the same server.
   deriving (Eq, Show)
 
 commandParser :: Opt.Parser Command
 commandParser = Opt.hsubparser $
   Opt.command "send" (Opt.info (pure Send) (Opt.progDesc "Send a text message, file, or directory")) <>
-  Opt.command "receive" (Opt.info (pure Receive) (Opt.progDesc "Receive a text message, file, or directory"))
+  Opt.command "receive" (Opt.info (pure Receive) (Opt.progDesc "Receive a text message, file, or directory")) <>
+  Opt.command "bounce" (Opt.info (pure Bounce) (Opt.progDesc "Send and receive a message through a server"))
 
 makeOptions :: Text -> Opt.Parser a -> Opt.ParserInfo a
 makeOptions headerText parser = Opt.info (Opt.helper <*> parser) (Opt.fullDesc <> Opt.header (toS headerText))
 
--- | Execute 'Command' against a Wormhole Rendezvous server.
-app :: Command -> Rendezvous.Session -> IO Int
-app command session = do
-  print command
+-- | A password used to exchange with a Magic Wormhole peer.
+--
+-- XXX: Just picking ByteString because that's the least amount of work. Need
+-- to look up exact type of password in the magic-wormhole docs.
+type Password = ByteString
+
+-- | Send a text message to a Magic Wormhole peer.
+sendText :: Rendezvous.Session -> Password -> Text -> IO ()
+sendText session password message = do
   nameplate <- Rendezvous.allocate session
   mailbox <- Rendezvous.claim session nameplate
   peer <- Rendezvous.open session mailbox  -- XXX: We should run `close` in the case of exceptions?
   let (Messages.Nameplate n) = nameplate
-  Peer.withEncryptedConnection peer (Spake2.makePassword (toS n <> "-potato"))
+  Peer.withEncryptedConnection peer (Spake2.makePassword (toS n <> "-" <> password))
     (\conn -> do
-        let offer = FileTransfer.Message "Brave new world that has such offers in it"
+        let offer = FileTransfer.Message message
         Peer.sendMessage conn (toS (Aeson.encode offer)))
-  pure 42
+
+-- | Receive a text message from a Magic Wormhole peer.
+receiveText :: Rendezvous.Session -> IO Text
+receiveText session = do
+  nameplates <- Rendezvous.list session
+  putStrLn $ "Nameplates: " <> Text.intercalate ", " [ n | Messages.Nameplate n <- nameplates ]
+  putText "Choose nameplate: "
+  nameplate <- getLine
+  mailbox <- Rendezvous.claim session (Messages.Nameplate nameplate)
+  peer <- Rendezvous.open session mailbox
+  putText "Password: "
+  password <- getLine
+  let fullPassword = toS nameplate <> "-" <> toS password
+  Peer.withEncryptedConnection peer (Spake2.makePassword fullPassword)
+    (\conn -> do
+        received <- atomically $ Peer.receiveMessage conn
+        case Aeson.eitherDecode (toS received) of
+          Left err -> panic $ "Could not decode message: " <> show err
+          Right (FileTransfer.Message message) -> pure message)
+
+-- | Bounce a trivial message to and from a Rendezvous server.
+bounce :: WebSocketEndpoint -> Messages.AppID -> IO ()
+bounce endpoint appID = do
+  side1 <- Messages.generateSide
+  side2 <- Messages.generateSide
+  Rendezvous.runClient endpoint appID side1 $ \session1 -> do
+    nameplate <- Rendezvous.allocate session1
+    mailbox1 <- Rendezvous.claim session1 nameplate
+    peer1 <- Rendezvous.open session1 mailbox1
+    Rendezvous.runClient endpoint appID side2 $ \session2 -> do
+      mailbox2 <- Rendezvous.claim session2 nameplate
+      peer2 <- Rendezvous.open session2 mailbox2
+      let message = "aoeu"
+      (_, output) <- concurrently (send peer1 message) (receive peer2)
+      unless (output == message) $ panic $ "Mismatched messages: " <> show message <> " != " <> show output
+  where
+    send peer message = Peer.withEncryptedConnection peer password $ \conn -> do
+      let offer = FileTransfer.Message message
+      Peer.sendMessage conn (toS (Aeson.encode offer))
+
+    receive peer = Peer.withEncryptedConnection peer password $ \conn -> do
+      received <- atomically $ Peer.receiveMessage conn
+      case Aeson.eitherDecode (toS received) of
+        Left err -> panic $ "Could not decode message: " <> show err
+        Right (FileTransfer.Message message) -> pure message
+
+    password = Spake2.makePassword "potato"
+
 
 main :: IO ()
 main = do
   options <- Opt.execParser (makeOptions "hocus-pocus - summon and traverse magic wormholes" optionsParser)
-  result <- Rendezvous.runClient (rendezvousEndpoint options) appID side (app (cmd options))
-  print result
+  side <- Messages.generateSide
+  let endpoint = rendezvousEndpoint options
+  case cmd options of
+    Send -> Rendezvous.runClient endpoint appID side $ \session ->
+      sendText session "potato" "Brave new world that has such offers in it"
+    Receive -> Rendezvous.runClient endpoint appID side $ \session -> do
+      message <- receiveText session
+      putStr message
+    Bounce -> bounce endpoint appID
   where
     appID = Messages.AppID "jml.io/hocus-pocus"
-    side = Messages.Side "treebeard"
