@@ -110,14 +110,12 @@ runClient
 runClient (WebSocketEndpoint host port path) appID side app =
   Socket.withSocketsDo . WS.runClient host port path $ \ws -> do
     session <- atomically $ new ws appID side
-    result <- race (readMessages session) (action session)
-    case result of
-      Left err -> panic $ "Cannot possibly happen: " <> err
-      Right result' -> pure result'
+    (_, result) <- concurrently (readMessages session) (action ws session)
+    pure result
   where
-    action session = do
+    action ws session = do
       bind session appID side
-      app session
+      app session `finally` WS.sendClose ws ("Connection closed connection" :: Text)
 
     -- | Read messages from the websocket forever, or until we fail to handle one.
     readMessages session = do
@@ -125,11 +123,15 @@ runClient (WebSocketEndpoint host port path) appID side app =
       -- the RPC response or forwarding to the mailbox message queue) all in
       -- one transaction. This means that if an exception occurs, the message
       -- will remain in the channel.
-      msg <- receive session
-      result <- atomically $ gotMessage session msg
-      case result of
-        Just err -> throwIO err
-        Nothing -> readMessages session
+      msg <- try $ receive session
+      case msg of
+        Left (WS.CloseRequest _ _) -> pass
+        Left err -> throwIO err
+        Right msg' -> do
+          result <- atomically $ gotMessage session msg'
+          case result of
+            Just err -> throwIO err
+            Nothing -> readMessages session
 
 -- | Make a request to the rendezvous server.
 --
