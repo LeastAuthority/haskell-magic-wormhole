@@ -1,8 +1,12 @@
+{-# OPTIONS_HADDOCK not-home #-}
 -- | Help interaction with websockets.
 module MagicWormhole.Internal.WebSockets
   ( WebSocketEndpoint(..)
   , parseWebSocketEndpoint
   , uriToWebSocketEndpoint
+  , Hostname
+  , Port
+  , Path
   ) where
 
 import Protolude
@@ -15,8 +19,13 @@ import Network.URI (URI(..), URIAuth(..), parseURI)
 -- Construct directly or with 'parseWebSocketEndpoint'.
 data WebSocketEndpoint = WebSocketEndpoint Hostname Port Path deriving (Eq, Show)
 
+-- | Host name for a websocket endpoint. e.g. @example.com@.
 type Hostname = String
+
+-- | Port number for a websocket endpoint. e.g. @80@
 type Port = Int
+
+-- | Path to a websocket endpoint. e.g. @\/v1\/foo@
 type Path = String
 
 -- | Turn a 'URI' into a 'WebSocketEndpoint', if we can.

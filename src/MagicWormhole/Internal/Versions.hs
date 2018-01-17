@@ -1,7 +1,14 @@
+{-# OPTIONS_HADDOCK not-home #-}
+-- |
+-- Description : Peer version exchange
+--
+-- Once a shared 'ClientProtocol.SessionKey' has been negotiated, the peers
+-- need to confirm that they have the same key. They do this with
+-- 'versionExchange'.
 module MagicWormhole.Internal.Versions
     ( versionExchange
     , Versions(..)
-    , Error(..)
+    , VersionsError(..)
     ) where
 
 import Protolude hiding (phase)
@@ -26,8 +33,11 @@ import qualified MagicWormhole.Internal.Messages as Messages
 
 -- | Exchange version information with a Magic Wormhole peer.
 --
--- Obtain the 'SessionKey' from 'pakeExchange'.
-versionExchange :: ClientProtocol.Connection -> ClientProtocol.SessionKey -> IO Versions
+-- Can throw an 'Error' if something goes wrong.
+versionExchange
+  :: ClientProtocol.Connection -- ^ A connection to a peer
+  -> ClientProtocol.SessionKey -- ^ A shared session key. Obtain this via 'MagicWormhole.Internal.Pake.pakeExchange'.
+  -> IO Versions  -- ^ Shared version information
 versionExchange conn key = do
   (_, theirVersions) <- concurrently sendVersion (atomically receiveVersion)
   if theirVersions /= Versions then throwIO VersionMismatch else pure Versions
@@ -38,6 +48,11 @@ versionExchange conn key = do
       unless (phase == Messages.VersionPhase) retry
       either (throwSTM . ParseError) pure $ Aeson.eitherDecode (toS plaintext)
 
+-- | Information about the versions supported by this Magic Wormhole client.
+--
+-- There are no extant Magic Wormhole implementations that send any meaningful
+-- information in their versions message, so this is just a single-valued
+-- type.
 data Versions = Versions deriving (Eq, Show)
 
 instance ToJSON Versions where
@@ -50,10 +65,13 @@ instance FromJSON Versions where
     pure Versions
   parseJSON unknown = typeMismatch "Versions" unknown
 
-
-data Error
+-- | An error occurred during 'versionExchange'.
+data VersionsError
+  -- | We could not interpret the other side's version information
   = ParseError String
+  -- | The other side sent us version information, but it does not match ours,
+  -- so we cannot proceed.
   | VersionMismatch
   deriving (Eq, Show, Typeable)
 
-instance Exception Error
+instance Exception VersionsError

@@ -1,3 +1,4 @@
+{-# OPTIONS_HADDOCK not-home #-}
 -- | Interface for communicating with a Magic Wormhole peer.
 --
 -- Build on this to write an application that uses Magic Wormhole.
@@ -6,9 +7,6 @@ module MagicWormhole.Internal.Peer
   , withEncryptedConnection
   , sendMessage
   , receiveMessage
-  , ClientProtocol.Connection
-  , ClientProtocol.SessionKey
-  , ClientProtocol.PlainText
   ) where
 
 import Protolude hiding (phase)
@@ -51,6 +49,12 @@ establishEncryption peer password = do
 -- Does the "pake" and "version" exchanges necessary to negotiate an encrypted
 -- connection and then runs the user-provided action. This action can then use
 -- 'sendMessage' and 'receiveMessage' to send & receive messages from its peer.
+--
+-- Can throw:
+--
+--   * 'ClientProtocol.PeerError', when we receive nonsensical data from the other peer
+--   * 'Pake.PakeError', when SPAKE2 cryptography fails
+--   * 'Versions.VersionsError', when we cannot agree on shared capabilities (this can sometimes imply SPAKE2 cryptography failure)
 withEncryptedConnection
   :: ClientProtocol.Connection  -- ^ Underlying to a peer. Get this with 'Rendezvous.open'.
   -> Spake2.Password  -- ^ The shared password that is the basis of the encryption. Construct with 'Spake2.makePassword'.
@@ -62,6 +66,8 @@ withEncryptedConnection peer password action = do
 
 
 -- | A Magic Wormhole peer-to-peer application session.
+--
+-- Construct one of these using 'withEncryptedConnection'.
 --
 -- You get one of these after you have found a peer, successfully negotatiated
 -- a shared key, and verified that negotiation by exchanging versions. (Note
@@ -98,7 +104,7 @@ newEncryptedConnection conn sessionKey = EncryptedConnection conn sessionKey <$>
 -- | Take a successfully negotiated peer connection and run an action that
 -- sends and receives encrypted messages.
 --
--- Establish an encrypted connection using 'establishEncryption'.
+-- Establish an encrypted connection using 'withEncryptedConnection'.
 --
 -- Use this to communicate with a Magic Wormhole peer.
 --

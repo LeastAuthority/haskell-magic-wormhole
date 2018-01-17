@@ -1,3 +1,4 @@
+{-# OPTIONS_HADDOCK not-home #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -20,6 +21,9 @@ module MagicWormhole.Internal.Rendezvous
     -- * Running a Rendezvous client
   , runClient
   , Session
+    -- * Errors
+  , ServerError(..)
+  , ClientError(..)
   ) where
 
 import Protolude hiding (list, phase)
@@ -54,10 +58,10 @@ import MagicWormhole.Internal.WebSockets (WebSocketEndpoint(..))
 
 -- | Abstract type representing a Magic Wormhole session.
 --
--- - 'runClient' gets a session
--- - 'rpc' sends RPCs from inside 'runClient'
--- - 'send' sends non-RPC messages (e.g. `bind`)
--- - 'readFromMailbox' reads messages from the mailbox
+-- Use 'runClient' to get a 'Session' on the Magic Wormhole Rendezvous server.
+-- Once you have a 'Session',
+-- use 'ping', 'list', 'allocate', 'claim', 'release', 'open', and 'close'
+-- to communicate with the Rendezvous server.
 data Session
   = Session
   { connection :: WS.Connection
@@ -143,16 +147,31 @@ rpc session req =
       -- to remove this check. (i.e. make a type for RPC requests).
       throwIO (NotAnRPC req)
     Just responseType -> do
-      box <- atomically $ expectResponse session responseType
+      box <- atomically $ expectResponse responseType
       send session req
       response <- atomically $ waitForResponse session responseType box
       case response of
         Messages.Error reason original -> throwIO (BadRequest reason original)
         response' -> pure response'
 
+  where
+    -- | Tell the connection that we expect a response of the given type.
+    --
+    -- Will throw a 'ClientError' if we are already expecting a response of this type.
+    expectResponse :: ResponseType -> STM (TMVar Messages.ServerMessage)
+    expectResponse responseType = do
+      pending <- readTVar (pendingVar session)
+      case HashMap.lookup responseType pending of
+        Nothing -> do
+          box <- newEmptyTMVar
+          writeTVar (pendingVar session) (HashMap.insert responseType box pending)
+          pure box
+        Just _ -> throwSTM (AlreadySent req)
+
+
 -- | Set the application ID and side for the rest of this connection.
 --
--- The Rendezvous protocol doesn't have a response to 'bind', so there's no
+-- The Rendezvous protocol doesn't have a response to @bind@, so there's no
 -- way to tell if it has had its effect.
 --
 -- See https://github.com/warner/magic-wormhole/issues/261
@@ -163,6 +182,8 @@ bind session appID side' = send session (Messages.Bind appID side')
 --
 -- This is an in-band ping, used mostly for testing. It is not necessary to
 -- keep the connection alive.
+--
+-- Throws a 'ClientError' if the server rejects the message for any reason.
 ping :: HasCallStack => Session -> Int -> IO Int
 ping session n = do
   response <- rpc session (Messages.Ping n)
@@ -171,6 +192,8 @@ ping session n = do
     unexpected -> unexpectedMessage (Messages.Ping n) unexpected
 
 -- | List the nameplates on the server.
+--
+-- Throws a 'ClientError' if the server rejects the message for any reason.
 list :: HasCallStack => Session -> IO [Messages.Nameplate]
 list session = do
   response <- rpc session Messages.List
@@ -179,6 +202,8 @@ list session = do
     unexpected -> unexpectedMessage Messages.List unexpected
 
 -- | Allocate a nameplate on the server.
+--
+-- Throws a 'ClientError' if the server rejects the message for any reason.
 allocate :: HasCallStack => Session -> IO Messages.Nameplate
 allocate session = do
   response <- rpc session Messages.Allocate
@@ -187,6 +212,8 @@ allocate session = do
     unexpected -> unexpectedMessage Messages.Allocate unexpected
 
 -- | Claim a nameplate on the server.
+--
+-- Throws a 'ClientError' if the server rejects the message for any reason.
 claim :: HasCallStack => Session -> Messages.Nameplate -> IO Messages.Mailbox
 claim session nameplate = do
   response <- rpc session (Messages.Claim nameplate)
@@ -200,6 +227,8 @@ claim session nameplate = do
 --
 -- TODO: Make this impossible to call unless we have already claimed a
 -- namespace.
+--
+-- Throws a 'ClientError' if the server rejects the message for any reason.
 release :: HasCallStack => Session -> Maybe Messages.Nameplate -> IO ()
 release session nameplate' = do
   response <- rpc session (Messages.Release nameplate')
@@ -224,6 +253,8 @@ open session mailbox = do
                                  }
 
 -- | Close a mailbox on the server.
+--
+-- Throws a 'ClientError' if the server rejects the message for any reason.
 close :: HasCallStack => Session -> Maybe Messages.Mailbox -> Maybe Messages.Mood -> IO ()
 close session mailbox' mood' = do
   response <- rpc session (Messages.Close mailbox' mood')
@@ -260,26 +291,13 @@ readFromMailbox' session = readTQueue (messageChan session)
 -- | Called when an RPC receives a message as a response that does not match
 -- the request.
 --
--- As things are written, this should never happen, because 'gotResponse'
+-- As things are written, this should never happen, because @gotResponse@
 -- makes sure we only ever populate the response placeholder with something
 -- that matches.
 --
 -- TODO: Try to make this unnecessary.
 unexpectedMessage :: HasCallStack => Messages.ClientMessage -> Messages.ServerMessage -> a
 unexpectedMessage request response = panic $ "Unexpected message: " <> show response <> ", in response to: " <> show request
-
--- | Tell the connection that we expect a response of the given type.
---
--- Will throw a 'ClientError' if we are already expecting a response of this type.
-expectResponse :: Session -> ResponseType -> STM (TMVar Messages.ServerMessage)
-expectResponse session responseType = do
-  pending <- readTVar (pendingVar session)
-  case HashMap.lookup responseType pending of
-    Nothing -> do
-      box <- newEmptyTMVar
-      writeTVar (pendingVar session) (HashMap.insert responseType box pending)
-      pure box
-    Just _ -> throwSTM (AlreadySent responseType)
 
 waitForResponse :: Session -> ResponseType -> TMVar Messages.ServerMessage -> STM Messages.ServerMessage
 waitForResponse session responseType box = do
@@ -294,7 +312,7 @@ gotResponse :: Session -> ResponseType -> Messages.ServerMessage -> STM (Maybe S
 gotResponse session responseType message = do
   pending <- readTVar (pendingVar session)
   case HashMap.lookup responseType pending of
-    Nothing -> pure (Just (ResponseWithoutRequest responseType message))
+    Nothing -> pure (Just (ResponseWithoutRequest message))
     Just box -> do
       -- TODO: This will block processing messages from the server (by
       -- retrying the transaction) if the box is already populated (i.e. if we
@@ -375,7 +393,7 @@ expectedResponse Messages.Ping{} = Just PongResponse
 -- | Error due to weirdness from the server.
 data ServerError
   = -- | Server sent us a response for something that we hadn't requested.
-    ResponseWithoutRequest ResponseType Messages.ServerMessage
+    ResponseWithoutRequest Messages.ServerMessage
     -- | We were sent a message other than "Welcome" on connect, or a
     -- "Welcome" message at any other time.
   | UnexpectedMessage Messages.ServerMessage
@@ -394,7 +412,7 @@ instance Exception ServerError
 data ClientError
   = -- | We tried to do an RPC while another RPC with the same response type
     -- was in flight. See warner/magic-wormhole#260 for details.
-    AlreadySent ResponseType
+    AlreadySent Messages.ClientMessage
     -- | Tried to send a non-RPC as if it were an RPC (i.e. expecting a response).
   | NotAnRPC Messages.ClientMessage
     -- | We sent a message that the server could not understand.

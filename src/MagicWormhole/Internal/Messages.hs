@@ -1,3 +1,4 @@
+{-# OPTIONS_HADDOCK not-home #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 -- | Messages sent to and from the Rendezvous server.
 module MagicWormhole.Internal.Messages
@@ -147,12 +148,19 @@ objectWithType typ pairs = object $ ("type" .= typ):pairs
 
 -- | Identifier for a "nameplate".
 --
--- TODO: Explain what a nameplate is and how it's used.
+-- A nameplate is a very short string that identifies one peer to another. Its
+-- purpose is to allow peers to find each other without having to communicate
+-- the 'Mailbox' identifier, which is generally too lengthy and cumbersome to
+-- be easily shared between humans.
+--
+-- Typically, one peer will allocate a nameplate and then communicate it
+-- out-of-band to the other peer.
 newtype Nameplate = Nameplate Text deriving (Eq, Show, ToJSON, FromJSON)
 
--- | TODO: Document phase once we understand what it is. It's a bit awkward,
--- because it appears to be an aspect of the client protocol, which I'd rather
--- the server protocol implementation not have to know about.
+-- | A phase in the peer-to-peer (aka "client") protocol.
+--
+-- Phases proceed in strict order: 'PakePhase', 'VersionPhase', then
+-- many 'ApplicationPhase'.
 data Phase
   = -- | Sent immediately on opening the mailbox.
     PakePhase
@@ -185,13 +193,18 @@ instance FromJSON Phase where
 
 -- | Identifier for a mailbox.
 --
--- TODO: Document what a mailbox is and how it's used.
+-- A mailbox is a shared access point between Magic Wormhole peers within the
+-- same application (specified by 'AppID'). To get a mailbox, you must first
+-- acquire a 'Nameplate' and then claim that nameplate for your side with
+-- 'MagicWormhole.claim'.
 --
--- This is defined as a "large random string", but in practice is a 13
--- character, lower-case, alpha-numeric string.
+-- A mailbox ID is defined in the
+-- [spec](https://github.com/warner/magic-wormhole/blob/master/docs/server-protocol.md)
+-- as a "large random string", but in practice is a 13 character, lower-case,
+-- alpha-numeric string.
 newtype Mailbox = Mailbox Text deriving (Eq, Show, ToJSON, FromJSON)
 
--- | The body of a magic wormhole message.
+-- | The body of a Magic Wormhole message.
 --
 -- This can be any arbitrary bytestring that is sent to or received from a
 -- wormhole peer.
@@ -215,7 +228,9 @@ data ClientMessage
     -- | Claim a nameplate.
   | Claim Nameplate
     -- | Release a claimed nameplate.
-    -- TODO: Document the semantics of not specifying the nameplate to release.
+    --
+    -- If no nameplate is provided, the server will attempt to release the
+    -- nameplate claimed (via 'Claim') earlier in this connection.
   | Release (Maybe Nameplate)
     -- | Open a mailbox.
   | Open Mailbox
@@ -274,7 +289,7 @@ instance ToJSON ClientMessage where
 --
 -- Recommendation is to use "$DNSNAME/$APPNAME", e.g.
 -- the Python `wormhole` command-line tool uses
--- "lothar.com/wormhole/text-or-file-xfer".
+-- @lothar.com\/wormhole\/text-or-file-xfer@.
 newtype AppID = AppID Text deriving (Eq, Show, FromJSON, ToJSON)
 
 -- | Short string used to differentiate between echoes of our own messages and

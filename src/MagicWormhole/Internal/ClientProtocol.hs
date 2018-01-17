@@ -1,19 +1,24 @@
+{-# OPTIONS_HADDOCK not-home #-}
 {-# LANGUAGE TupleSections #-}
--- | Low-level details of talking to a Magic Wormhole peer.
+-- |
+-- Description : Low-level details for talking to a Magic Wormhole peer.
+--
+-- Low-level details for talking to a Magic Wormhole peer.
 --
 -- For a user-facing interface, see "MagicWormhole.Internal.Peer".
 module MagicWormhole.Internal.ClientProtocol
   ( Connection(..)
   , SessionKey(..)
-  , Error(..)
+  , PeerError(..)
   , sendEncrypted
   , receiveEncrypted
-  , CipherText(..)
   , PlainText(..)
   -- * Exported for testing
+  , CipherText(..)
   , decrypt
   , encrypt
   , deriveKey
+  , Purpose
   , phasePurpose
   ) where
 
@@ -31,7 +36,7 @@ import qualified MagicWormhole.Internal.Messages as Messages
 
 -- | A connection to a peer via the Rendezvous server.
 --
--- Normally construct this with 'Rendezvous.open'.
+-- Normally construct this with 'MagicWormhole.open'.
 data Connection
   = Connection
   { -- | The application ID for this connection.
@@ -46,12 +51,19 @@ data Connection
 
 -- | SPAKE2 key used for the duration of a Magic Wormhole peer-to-peer connection.
 --
+-- You can obtain a 'SessionKey' using 'MagicWormhole.Internal.Pake.pakeExchange'.
+--
 -- Individual messages will be encrypted using 'encrypt' ('decrypt'), which
--- must be given a key that's /generated/ from this one (see 'deriveKey' and
--- 'derivePhaseKey').
+-- must be given a key that's /generated/ from this one (see 'deriveKey').
 newtype SessionKey = SessionKey ByteString
 
-sendEncrypted :: Connection -> SessionKey -> Messages.Phase -> PlainText -> IO ()
+-- | Send an encrypted message to the peer.
+sendEncrypted
+  :: Connection -- ^ Connection to the peer
+  -> SessionKey -- ^ The key established for this session
+  -> Messages.Phase -- ^ Phase of the protocol this message represents
+  -> PlainText -- ^ Content of the message
+  -> IO ()
 sendEncrypted conn key phase plaintext = do
   encryptedBody <- encryptMessage conn key phase plaintext
   send conn phase encryptedBody
@@ -59,7 +71,10 @@ sendEncrypted conn key phase plaintext = do
 -- | Pull a message from the peer and decrypt it. If the message fails to
 -- decrypt, an exception will be thrown, aborting the transaction and leaving
 -- the message on the queue.
-receiveEncrypted :: Connection -> SessionKey -> STM (Messages.Phase, PlainText)
+receiveEncrypted
+  :: Connection -- ^ Connection to the peer
+  -> SessionKey -- ^ The key established for this session
+  -> STM (Messages.Phase, PlainText)  -- ^ The phase and content of the message we received
 receiveEncrypted conn key = do
   message <- receive conn
   either throwSTM pure $ decryptMessage key message
@@ -79,7 +94,7 @@ encrypt key (PlainText message) = do
   pure . CipherText $ Saltine.encode nonce <> ciphertext
 
 -- | Decrypt a 'MailboxMessage' using 'SecretBox'. Derives the key from the phase.
-decryptMessage :: SessionKey -> Messages.MailboxMessage -> Either Error (Messages.Phase, PlainText)
+decryptMessage :: SessionKey -> Messages.MailboxMessage -> Either PeerError (Messages.Phase, PlainText)
 decryptMessage key message =
   let Messages.Body ciphertext = Messages.body message
   in (Messages.phase message,) <$> decrypt (derivedKey message) (CipherText ciphertext)
@@ -88,13 +103,16 @@ decryptMessage key message =
 
 -- | Decrypt a message using 'SecretBox'. Get the key from 'deriveKey'.
 -- Encrypted using 'encrypt'.
-decrypt :: SecretBox.Key -> CipherText -> Either Error PlainText
+decrypt :: SecretBox.Key -> CipherText -> Either PeerError PlainText
 decrypt key (CipherText ciphertext) = do
   let (nonce', ciphertext') = ByteString.splitAt ByteSizes.secretBoxNonce ciphertext
   nonce <- note (InvalidNonce nonce') $ Saltine.decode nonce'
   note (CouldNotDecrypt ciphertext') $ PlainText <$> SecretBox.secretboxOpen key nonce ciphertext'
 
+-- | Unencrypted text.
 newtype PlainText = PlainText { plainTextToByteString :: ByteString } deriving (Eq, Ord, Show)
+
+-- | Encrypted text.
 newtype CipherText = CipherText { cipherTextToByteString :: ByteString } deriving (Eq, Ord, Show)
 
 -- | The purpose of a message. 'deriveKey' combines this with the 'SessionKey'
@@ -103,7 +121,10 @@ newtype CipherText = CipherText { cipherTextToByteString :: ByteString } derivin
 type Purpose = ByteString
 
 -- | Derive a one-off key from the SPAKE2 'SessionKey'. Use this key only once.
-deriveKey :: SessionKey -> Purpose -> SecretBox.Key
+deriveKey
+  :: SessionKey -- ^ Key established for this session
+  -> Purpose -- ^ What this key is for. Normally created using 'phasePurpose'.
+  -> SecretBox.Key  -- ^ A key to use once to send or receive a message
 deriveKey (SessionKey key) purpose =
   fromMaybe (panic "Could not encode to SecretBox key") $ -- Impossible. We guarntee it's the right size.
     Saltine.decode (HKDF.expand (HKDF.extract salt key :: HKDF.PRK SHA256) purpose keySize)
@@ -120,10 +141,14 @@ phasePurpose (Messages.Side side) phase = "wormhole:phase:" <> sideHashDigest <>
     phaseHashDigest = hashDigest (toS (Messages.phaseName phase) :: ByteString)
     hashDigest thing = ByteArray.convert (hashWith SHA256 thing)
 
-data Error
+-- | Something that went wrong with the client protocol.
+data PeerError
+  -- | We received a message from the other side that we could not decrypt
   = CouldNotDecrypt ByteString
+  -- | We could not determine the SecretBox nonce from the message we received
   | InvalidNonce ByteString
+  -- | We received a message for a phase that we have already received a message for.
   | MessageOutOfOrder Messages.Phase PlainText
   deriving (Eq, Show, Typeable)
 
-instance Exception Error
+instance Exception PeerError
