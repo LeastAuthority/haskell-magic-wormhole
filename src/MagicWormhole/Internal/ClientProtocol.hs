@@ -8,7 +8,8 @@ module MagicWormhole.Internal.ClientProtocol
   , Error(..)
   , sendEncrypted
   , receiveEncrypted
-  , PlainText
+  , CipherText(..)
+  , PlainText(..)
   -- * Exported for testing
   , decrypt
   , encrypt
@@ -65,37 +66,36 @@ receiveEncrypted conn key = do
 
 -- | Encrypt a mailbox message, deriving the key from the phase.
 encryptMessage :: Connection -> SessionKey -> Messages.Phase -> PlainText -> IO Messages.Body
-encryptMessage conn key phase plaintext = Messages.Body <$> encrypt derivedKey plaintext
+encryptMessage conn key phase plaintext = Messages.Body . cipherTextToByteString <$> encrypt derivedKey plaintext
   where
     derivedKey = deriveKey key (phasePurpose (ourSide conn) phase)
 
 -- | Encrypt a message using 'SecretBox'. Get the key from 'deriveKey'.
 -- Decrypt with 'decrypt'.
 encrypt :: SecretBox.Key -> PlainText -> IO CipherText
-encrypt key message = do
+encrypt key (PlainText message) = do
   nonce <- SecretBox.newNonce
   let ciphertext = SecretBox.secretbox key nonce message
-  pure $ Saltine.encode nonce <> ciphertext
+  pure . CipherText $ Saltine.encode nonce <> ciphertext
 
 -- | Decrypt a 'MailboxMessage' using 'SecretBox'. Derives the key from the phase.
 decryptMessage :: SessionKey -> Messages.MailboxMessage -> Either Error (Messages.Phase, PlainText)
 decryptMessage key message =
   let Messages.Body ciphertext = Messages.body message
-  in (Messages.phase message,) <$> decrypt (derivedKey message) ciphertext
+  in (Messages.phase message,) <$> decrypt (derivedKey message) (CipherText ciphertext)
   where
     derivedKey msg = deriveKey key (phasePurpose (Messages.side msg) (Messages.phase msg))
 
 -- | Decrypt a message using 'SecretBox'. Get the key from 'deriveKey'.
 -- Encrypted using 'encrypt'.
 decrypt :: SecretBox.Key -> CipherText -> Either Error PlainText
-decrypt key ciphertext = do
+decrypt key (CipherText ciphertext) = do
   let (nonce', ciphertext') = ByteString.splitAt ByteSizes.secretBoxNonce ciphertext
   nonce <- note (InvalidNonce nonce') $ Saltine.decode nonce'
-  note (CouldNotDecrypt ciphertext') $ SecretBox.secretboxOpen key nonce ciphertext'
+  note (CouldNotDecrypt ciphertext') $ PlainText <$> SecretBox.secretboxOpen key nonce ciphertext'
 
--- XXX: Different types for ciphertext and plaintext please!
-type PlainText = ByteString
-type CipherText = ByteString
+newtype PlainText = PlainText { plainTextToByteString :: ByteString } deriving (Eq, Ord, Show)
+newtype CipherText = CipherText { cipherTextToByteString :: ByteString } deriving (Eq, Ord, Show)
 
 -- | The purpose of a message. 'deriveKey' combines this with the 'SessionKey'
 -- to make a unique 'SecretBox.Key'. Do not re-use a 'Purpose' to send more

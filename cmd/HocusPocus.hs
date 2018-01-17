@@ -11,6 +11,7 @@ import qualified Options.Applicative as Opt
 import qualified Crypto.Spake2 as Spake2
 import qualified Data.Aeson as Aeson
 import qualified Data.Text as Text
+import qualified MagicWormhole.Internal.ClientProtocol as ClientProtocol
 import qualified MagicWormhole.Internal.FileTransfer as FileTransfer
 import qualified MagicWormhole.Internal.Messages as Messages
 import qualified MagicWormhole.Internal.Peer as Peer
@@ -71,7 +72,7 @@ sendText session password message = do
   Peer.withEncryptedConnection peer (Spake2.makePassword (toS n <> "-" <> password))
     (\conn -> do
         let offer = FileTransfer.Message message
-        Peer.sendMessage conn (toS (Aeson.encode offer)))
+        Peer.sendMessage conn (ClientProtocol.PlainText (toS (Aeson.encode offer))))
 
 -- | Receive a text message from a Magic Wormhole peer.
 receiveText :: Rendezvous.Session -> IO Text
@@ -87,7 +88,7 @@ receiveText session = do
   let fullPassword = toS nameplate <> "-" <> toS password
   Peer.withEncryptedConnection peer (Spake2.makePassword fullPassword)
     (\conn -> do
-        received <- atomically $ Peer.receiveMessage conn
+        ClientProtocol.PlainText received <- atomically $ Peer.receiveMessage conn
         case Aeson.eitherDecode (toS received) of
           Left err -> panic $ "Could not decode message: " <> show err
           Right (FileTransfer.Message message) -> pure message)
@@ -110,10 +111,10 @@ bounce endpoint appID = do
   where
     send peer message = Peer.withEncryptedConnection peer password $ \conn -> do
       let offer = FileTransfer.Message message
-      Peer.sendMessage conn (toS (Aeson.encode offer))
+      Peer.sendMessage conn (ClientProtocol.PlainText (toS (Aeson.encode offer)))
 
     receive peer = Peer.withEncryptedConnection peer password $ \conn -> do
-      received <- atomically $ Peer.receiveMessage conn
+      ClientProtocol.PlainText received <- atomically $ Peer.receiveMessage conn
       case Aeson.eitherDecode (toS received) of
         Left err -> panic $ "Could not decode message: " <> show err
         Right (FileTransfer.Message message) -> pure message

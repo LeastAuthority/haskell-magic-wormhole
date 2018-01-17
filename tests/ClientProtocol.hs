@@ -1,7 +1,7 @@
 -- | Tests for the "client protocol".
 module ClientProtocol (tests) where
 
-import Protolude hiding (phase)
+import Protolude
 
 import Hedgehog (forAll, property, (===))
 import qualified Hedgehog.Gen as Gen
@@ -19,7 +19,7 @@ tests = pure $ testGroup "ClientProtocol"
       secret <- forAll $ Gen.bytes (Range.linear 0 10)
       let key = ClientProtocol.deriveKey (ClientProtocol.SessionKey secret) purpose
       plaintext <- forAll $ Gen.bytes (Range.linear 1 256)
-      ciphertext <- liftIO $ ClientProtocol.encrypt key plaintext
+      ciphertext <- liftIO $ ClientProtocol.encrypt key (ClientProtocol.PlainText plaintext)
       let decrypted = ClientProtocol.decrypt key ciphertext
-      decrypted === Right plaintext
+      decrypted === Right (ClientProtocol.PlainText plaintext)
   ]

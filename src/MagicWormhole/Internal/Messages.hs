@@ -333,7 +333,8 @@ instance FromJSON MessageID where
   parseJSON unknown = typeMismatch "MessageID" unknown
 
 -- XXX: It's possible we want another type that represents an *unsent*
--- message, which will not have a side and will not have message ID.
+-- message, which will not have a side and will not have message ID. We
+-- currently do this using (Phase, Body) tuples.
 -- | A message sent to a mailbox.
 data MailboxMessage
   = MailboxMessage

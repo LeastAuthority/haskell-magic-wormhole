@@ -95,14 +95,14 @@ tests = testSpec "Integration" $ do
         [ "--key=" <> toS (convertToBase Base16 (Saltine.encode key) :: ByteString)
         , "--nonce=" <> toS (convertToBase Base16 (Saltine.encode nonce) :: ByteString)
         ] $ \stdin stdout -> do
-          let message = "Hello world!"
-          encryptedByUs <- ClientProtocol.encrypt key message
+          let message = ClientProtocol.PlainText "Hello world!"
+          ClientProtocol.CipherText encryptedByUs <- ClientProtocol.encrypt key message
           Char8.hPutStrLn stdin (convertToBase Base16 encryptedByUs :: ByteString)
           decryptedByPython <- ByteString.hGetLine stdout
-          decryptedByPython `shouldBe` message
+          ClientProtocol.PlainText decryptedByPython `shouldBe` message
           encryptedByPython <- ByteString.hGetLine stdout
           let Right encryptedBytes = convertFromBase Base16 encryptedByPython
-          let Right decryptedByUs = ClientProtocol.decrypt key encryptedBytes
+          let Right decryptedByUs = ClientProtocol.decrypt key (ClientProtocol.CipherText encryptedBytes)
           decryptedByUs `shouldBe` message
 
 

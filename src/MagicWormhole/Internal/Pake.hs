@@ -34,8 +34,8 @@ pakeExchange conn password = do
   where
     sendPakeMessage = ClientProtocol.send conn Messages.PakePhase . spakeBytesToMessageBody
     receivePakeMessage  = do
-      -- XXX: This is kind of a fun approach, but it means that everyone else
-      -- has to promise that they *don't* consume pake messages.
+      -- This is kind of a fun approach, but it means that everyone else has
+      -- to promise that they *don't* consume pake messages.
       msg <- ClientProtocol.receive conn
       unless (Messages.phase msg == Messages.PakePhase) retry
       pure $ messageBodyToSpakeBytes (Messages.body msg)
