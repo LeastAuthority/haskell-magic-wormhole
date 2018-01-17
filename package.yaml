@@ -2,11 +2,23 @@ name: magic-wormhole
 version: 0.1.0
 synopsis: Interact with Magic Wormhole
 description: |
-  Honestly, who can say?
+  Client library for interacting with a Magic Wormhole server.
+
+  Magic Wormhole is a technology for getting things from one computer to another, safely.
+  It does this by using a server to locate peers, and then using SPAKE2 encryption to
+  negotiate a secure connection to a peer. It is especially useful for sending files
+  and short messages to other humans.
+
+  You can learn more about Magic Wormhole by exploring the documentation on
+  the [canonical, Python
+  implementation](https://github.com/warner/magic-wormhole).
+
 maintainer: Jonathan M. Lange <jml@mumak.net>
 license: Apache
-github: jml/haskell-magic-wormhole
+github: LeastAuthority/haskell-magic-wormhole
 category: Crypto
+extra-source-files:
+  - CHANGELOG.md
 
 ghc-options: -Wall
 default-extensions:
@@ -15,8 +27,9 @@ default-extensions:
   - TypeApplications
 
 dependencies:
-  - base
+  - base >= 4.9 && < 5
   - protolude >= 0.2
+  - spake2 >= 0.4.1
 
 library:
   source-dirs: src
@@ -31,7 +44,6 @@ library:
     - network-uri
     - pqueue
     - saltine
-    - spake2 >= 0.4
     - stm
     - unordered-containers
     - websockets
@@ -44,7 +56,6 @@ executables:
       - aeson
       - magic-wormhole
       - optparse-applicative
-      - spake2 >= 0.4
       - text
 
 tests:
@@ -59,7 +70,6 @@ tests:
       - memory
       - process
       - saltine
-      - spake2 >= 0.3
       - stm
       - tasty
       - tasty-hedgehog
