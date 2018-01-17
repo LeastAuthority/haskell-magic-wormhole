@@ -66,7 +66,7 @@ receiveEncrypted conn key = do
 
 -- | Encrypt a mailbox message, deriving the key from the phase.
 encryptMessage :: Connection -> SessionKey -> Messages.Phase -> PlainText -> IO Messages.Body
-encryptMessage conn key phase plaintext = Messages.Body . unCipherText <$> encrypt derivedKey plaintext
+encryptMessage conn key phase plaintext = Messages.Body . cipherTextToByteString <$> encrypt derivedKey plaintext
   where
     derivedKey = deriveKey key (phasePurpose (ourSide conn) phase)
 
@@ -94,8 +94,8 @@ decrypt key (CipherText ciphertext) = do
   nonce <- note (InvalidNonce nonce') $ Saltine.decode nonce'
   note (CouldNotDecrypt ciphertext') $ PlainText <$> SecretBox.secretboxOpen key nonce ciphertext'
 
-newtype PlainText = PlainText { unPlainText :: ByteString } deriving (Eq, Ord, Show)
-newtype CipherText = CipherText { unCipherText :: ByteString } deriving (Eq, Ord, Show)
+newtype PlainText = PlainText { plainTextToByteString :: ByteString } deriving (Eq, Ord, Show)
+newtype CipherText = CipherText { cipherTextToByteString :: ByteString } deriving (Eq, Ord, Show)
 
 -- | The purpose of a message. 'deriveKey' combines this with the 'SessionKey'
 -- to make a unique 'SecretBox.Key'. Do not re-use a 'Purpose' to send more
