@@ -48,6 +48,7 @@ library
     , websockets
   exposed-modules:
       MagicWormhole
+  other-modules:
       MagicWormhole.Internal.ClientProtocol
       MagicWormhole.Internal.FileTransfer
       MagicWormhole.Internal.Messages
