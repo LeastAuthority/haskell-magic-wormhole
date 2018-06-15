@@ -20,19 +20,28 @@ import Data.Aeson
   , object
   , withObject
   )
+import System.Posix.Types (FileOffset)
 
 -- | An offer made by a sender as part of the Magic Wormhole file transfer protocol.
 --
 -- Currently only supports sending simple text messages. A full version would
 -- also support sending files and directories.
-newtype Offer
+data Offer
   -- | A simple text message.
-  = Message Text deriving (Eq, Show)
+  = Message Text
+  | File FilePath FileOffset
+  deriving (Eq, Show)
 
 instance ToJSON Offer where
   toJSON (Message text) = object [ "offer" .= object [ "message" .= text ] ]
+  toJSON (File name size) = object [ "offer" .= object [ "file" .= object [ "filename" .= name, "filesize" .= fromEnum size ] ] ]
 
 instance FromJSON Offer where
   parseJSON = withObject "Offer" $ \obj -> do
     offer <- obj .: "offer"
-    Message <$> offer .: "message"
+    asum [ Message <$> offer .: "message"
+         , File
+           <$> ((offer .: "file") >>= (.: "filename"))
+           <*> (toEnum <$> ((offer .: "file") >>= (.: "filesize")))
+         ]
+
