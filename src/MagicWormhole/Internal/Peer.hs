@@ -7,6 +7,7 @@ module MagicWormhole.Internal.Peer
   , withEncryptedConnection
   , sendMessage
   , receiveMessage
+  , deriveKey
   ) where
 
 import Protolude hiding (phase)
@@ -17,6 +18,7 @@ import Control.Concurrent.STM.TVar
   , newTVar
   , readTVar
   )
+import qualified Crypto.Saltine.Core.SecretBox as SecretBox
 import qualified Crypto.Spake2 as Spake2
 
 import qualified MagicWormhole.Internal.ClientProtocol as ClientProtocol
@@ -63,7 +65,6 @@ withEncryptedConnection
 withEncryptedConnection peer password action = do
   conn <- establishEncryption peer password
   runEncryptedConnection conn (action conn)
-
 
 -- | A Magic Wormhole peer-to-peer application session.
 --
@@ -146,3 +147,10 @@ sendMessage conn body = do
 -- Obtain an 'EncryptedConnection' with 'withEncryptedConnection'.
 receiveMessage :: EncryptedConnection -> STM ClientProtocol.PlainText
 receiveMessage conn = snd <$> Sequential.next (inbound conn)
+
+
+-- | Derive a new key for the given purpose
+--
+-- Construct a new key from the existing session key for the given purpose
+deriveKey :: EncryptedConnection -> ClientProtocol.Purpose -> SecretBox.Key
+deriveKey conn = ClientProtocol.deriveKey (sharedKey conn)
