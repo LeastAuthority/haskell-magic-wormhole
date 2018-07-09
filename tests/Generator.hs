@@ -7,6 +7,7 @@ module Generator
   , appIDs
   , phases
   , sides
+  , offerMessages
   ) where
 
 import Protolude
@@ -28,6 +29,9 @@ import MagicWormhole.Internal.Messages
   , Nameplate(..)
   , Mailbox(..)
   , Mood(..)
+  )
+import qualified MagicWormhole.Internal.FileTransfer as F
+  ( Offer(..)
   )
 
 clientMessages :: MonadGen m => m ClientMessage
@@ -97,3 +101,9 @@ mailboxMessages = MailboxMessage <$> sides <*> phases <*> Gen.maybe messageIDs <
 
 welcomeMessages :: MonadGen m => m WelcomeMessage
 welcomeMessages = WelcomeMessage <$> Gen.maybe (Gen.text (Range.linear 0 1024) Gen.unicode) <*> Gen.maybe (Gen.text (Range.linear 0 1024) Gen.unicode)
+
+offerMessages :: MonadGen m => m F.Offer
+offerMessages = Gen.choice
+  [ F.Message <$> (Gen.text (Range.linear 0 1024) Gen.unicode)
+  , F.File <$> toS <$> (Gen.text (Range.linear 0 100) Gen.alphaNum)  <*> (fromIntegral <$> (Gen.int (Range.linear 0 maxBound)))
+  ]
