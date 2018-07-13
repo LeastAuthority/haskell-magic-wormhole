@@ -151,6 +151,6 @@ receiveMessage conn = snd <$> Sequential.next (inbound conn)
 
 -- | Derive a new key for the given purpose
 --
--- Construct a new key from the existing session key for the given purpose
+-- Construct a new key from the encrypted connection's session key for the given purpose
 deriveKey :: EncryptedConnection -> ClientProtocol.Purpose -> SecretBox.Key
 deriveKey conn = ClientProtocol.deriveKey (sharedKey conn)
