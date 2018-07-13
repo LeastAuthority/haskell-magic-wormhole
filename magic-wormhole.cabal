@@ -105,4 +105,5 @@ test-suite tasty
       Pake
       Sequential
       WebSockets
+      FileTransfer
   default-language: Haskell2010
