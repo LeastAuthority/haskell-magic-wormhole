@@ -44,7 +44,7 @@ jobs:
           command: virtualenv testing-venv
       - run:
           name: Install dependencies
-          command: testing-venv/bin/pip install --user -r requirements.txt
+          command: testing-venv/bin/pip install -r requirements.txt
       - run:
           name: Tests
           command: |
