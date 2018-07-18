@@ -37,11 +37,16 @@ jobs:
             - /root/.stack
             - .stack-work
       - run:
-          name: Install pip
-          command: apt-get install -y python-pip
+          name: Install virtualenv
+          command: apt-get install -y python-virtualenv
+      - run:
+          name: Create virtualenv
+          command: virtualenv testing-venv
       - run:
           name: Install dependencies
-          command: pip install --user -r requirements.txt
+          command: testing-venv/bin/pip install --user -r requirements.txt
       - run:
           name: Tests
-          command: stack test --skip-ghc-check --no-terminal magic-wormhole
+          command: |
+            . testing-venv/bin/activate
+            stack test --skip-ghc-check --no-terminal magic-wormhole
