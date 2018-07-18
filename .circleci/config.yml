@@ -40,6 +40,9 @@ jobs:
           name: Install virtualenv
           command: apt-get install -y python-virtualenv
       - run:
+          name: Install Python build deps
+          command: apt-get install -y gcc python-dev libssl-dev libffi-dev
+      - run:
           name: Create virtualenv
           command: virtualenv testing-venv
       - run:
