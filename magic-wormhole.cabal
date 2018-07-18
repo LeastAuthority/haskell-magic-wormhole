@@ -64,7 +64,7 @@ executable hocus-pocus
   hs-source-dirs:
       cmd
   default-extensions: NoImplicitPrelude OverloadedStrings TypeApplications
-  ghc-options: -Wall
+  ghc-options: -Wall -Werror=incomplete-patterns
   build-depends:
       base
     , protolude >= 0.2
