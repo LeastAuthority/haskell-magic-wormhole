@@ -87,7 +87,8 @@ receiveText session = do
         MagicWormhole.PlainText received <- atomically $ MagicWormhole.receiveMessage conn
         case Aeson.eitherDecode (toS received) of
           Left err -> panic $ "Could not decode message: " <> show err
-          Right (MagicWormhole.Message message) -> pure message)
+          Right (MagicWormhole.Message message) -> pure message
+          Right (MagicWormhole.File _ _) -> pure $ "File transfer is not supported")
 
 -- | Bounce a trivial message to and from a Rendezvous server.
 bounce :: MagicWormhole.WebSocketEndpoint -> MagicWormhole.AppID -> IO ()
@@ -114,6 +115,7 @@ bounce endpoint appID = do
       case Aeson.eitherDecode (toS received) of
         Left err -> panic $ "Could not decode message: " <> show err
         Right (MagicWormhole.Message message) -> pure message
+        Right (MagicWormhole.File _ _) -> pure $ "File transfer is not supported"
 
     password = Spake2.makePassword "potato"
 
