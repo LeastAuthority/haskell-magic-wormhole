@@ -88,7 +88,8 @@ receiveText session = do
         case Aeson.eitherDecode (toS received) of
           Left err -> panic $ "Could not decode message: " <> show err
           Right (MagicWormhole.Message message) -> pure message
-          Right (MagicWormhole.File _ _) -> pure $ "File transfer is not supported")
+          Right (MagicWormhole.File _ _) -> pure $ "File transfer is not supported"
+          Right (MagicWormhole.Directory _ _ _ _ _) -> pure $ "Directory transfer is not supported")
 
 -- | Bounce a trivial message to and from a Rendezvous server.
 bounce :: MagicWormhole.WebSocketEndpoint -> MagicWormhole.AppID -> IO ()
@@ -116,6 +117,7 @@ bounce endpoint appID = do
         Left err -> panic $ "Could not decode message: " <> show err
         Right (MagicWormhole.Message message) -> pure message
         Right (MagicWormhole.File _ _) -> pure $ "File transfer is not supported"
+        Right (MagicWormhole.Directory _ _ _ _ _) -> pure $ "Directory transfer is not supported"
 
     password = Spake2.makePassword "potato"
 
