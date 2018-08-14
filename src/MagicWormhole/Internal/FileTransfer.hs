@@ -33,23 +33,17 @@ data Offer
   | File FilePath FileOffset
   -- | Offer a Directory
   | Directory
-    Mode
-    -- ^ Mode. Currently always "zipfile/deflated".
-    DirectoryName
-    -- ^ Directory Name.
-    ZipSize
-    -- ^ size of the transmitted compressed data in bytes
-    NumBytes
-    -- ^ estimated total size of the uncompressed directory
-    NumFiles
-    -- ^ number of files and directories being sent
-  deriving (Eq, Show)
-
-type Mode = Text
-type DirectoryName = Text
-type ZipSize = Int64
-type NumBytes = Int64
-type NumFiles = Int64
+    { transmissionMode :: Text
+      -- ^ Mode. Currently always "zipfile/deflated".
+    , dirName :: Text
+      -- ^ Directory Name.
+    , zipSize :: Int64
+      -- ^ size of the transmitted compressed data in bytes
+    , numBytes :: Int64
+      -- ^ estimated total size of the uncompressed directory
+    , numFiles :: Int64
+      -- ^ number of files and directories being sent
+    } deriving (Eq, Show)
 
 instance ToJSON Offer where
   toJSON (Message text) = object [ "offer" .= object [ "message" .= text ] ]
