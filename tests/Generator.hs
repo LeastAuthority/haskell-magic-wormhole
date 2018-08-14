@@ -106,4 +106,10 @@ offerMessages :: MonadGen m => m F.Offer
 offerMessages = Gen.choice
   [ F.Message <$> (Gen.text (Range.linear 0 1024) Gen.unicode)
   , F.File <$> toS <$> (Gen.text (Range.linear 0 100) Gen.alphaNum)  <*> (fromIntegral <$> (Gen.int (Range.linear 0 maxBound)))
+  , F.Directory
+    <$> (toS <$> (Gen.text (Range.linear 0 100) Gen.alphaNum))
+    <*> (toS <$> (Gen.text (Range.linear 0 100) Gen.alphaNum))
+    <*> (fromIntegral <$> (Gen.int (Range.linear 0 maxBound)))
+    <*> (fromIntegral <$> (Gen.int (Range.linear 0 maxBound)))
+    <*> (fromIntegral <$> (Gen.int (Range.linear 0 maxBound)))
   ]
