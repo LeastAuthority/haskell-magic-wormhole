@@ -33,17 +33,23 @@ data Offer
   | File FilePath FileOffset
   -- | Offer a Directory
   | Directory
-    Text
+    Mode
     -- ^ Mode. Currently always "zipfile/deflated".
-    Text
+    DirectoryName
     -- ^ Directory Name.
-    Integer
+    ZipSize
     -- ^ size of the transmitted compressed data in bytes
-    Integer
+    NumBytes
     -- ^ estimated total size of the uncompressed directory
-    Integer
+    NumFiles
     -- ^ number of files and directories being sent
   deriving (Eq, Show)
+
+type Mode = Text
+type DirectoryName = Text
+type ZipSize = Int64
+type NumBytes = Int64
+type NumFiles = Int64
 
 instance ToJSON Offer where
   toJSON (Message text) = object [ "offer" .= object [ "message" .= text ] ]
