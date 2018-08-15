@@ -21,6 +21,7 @@ import Data.Aeson
   , withObject
   )
 import System.Posix.Types (FileOffset)
+import Numeric.Natural (Natural)
 
 -- | An offer made by a sender as part of the Magic Wormhole file transfer protocol.
 --
@@ -33,15 +34,15 @@ data Offer
   | File FilePath FileOffset
   -- | Offer a Directory
   | Directory
-    { transmissionMode :: Text
+    { directoryMode :: Text
       -- ^ Mode. Currently always "zipfile/deflated".
     , dirName :: Text
       -- ^ Directory Name.
-    , zipSize :: Int64
+    , zipSize :: Natural
       -- ^ size of the transmitted compressed data in bytes
-    , numBytes :: Int64
+    , numBytes :: Natural
       -- ^ estimated total size of the uncompressed directory
-    , numFiles :: Int64
+    , numFiles :: Natural
       -- ^ number of files and directories being sent
     } deriving (Eq, Show)
 
