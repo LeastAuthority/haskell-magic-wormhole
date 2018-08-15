@@ -8,6 +8,8 @@
 -- you can send an 'Offer' to share a simple text message.
 module MagicWormhole.Internal.FileTransfer
   ( Offer(..)
+  -- * for tests
+  , DirectoryMode(..)
   ) where
 
 import Protolude
@@ -19,7 +21,9 @@ import Data.Aeson
   , (.=)
   , object
   , withObject
+  , Value( String )
   )
+import Data.Aeson.Types (typeMismatch)
 import System.Posix.Types (FileOffset)
 import Numeric.Natural (Natural)
 
@@ -34,7 +38,7 @@ data Offer
   | File FilePath FileOffset
   -- | Offer a Directory
   | Directory
-    { directoryMode :: Text
+    { directoryMode :: DirectoryMode
       -- ^ Mode. Currently always "zipfile/deflated".
     , dirName :: Text
       -- ^ Directory Name.
@@ -66,3 +70,12 @@ instance FromJSON Offer where
            <*> (toEnum <$> ((offer .: "directory") >>= (.: "numfiles")))
          ]
 
+data DirectoryMode = ZipFileDeflated
+  deriving (Eq, Show)
+
+instance FromJSON DirectoryMode where
+  parseJSON (String s) | s == "zipfile/deflated" = return ZipFileDeflated
+  parseJSON o = typeMismatch "failed to parse Directory Mode" o
+
+instance ToJSON DirectoryMode where
+  toJSON ZipFileDeflated = String "zipfile/deflated"

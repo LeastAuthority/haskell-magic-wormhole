@@ -32,6 +32,7 @@ import MagicWormhole.Internal.Messages
   )
 import qualified MagicWormhole.Internal.FileTransfer as F
   ( Offer(..)
+  , DirectoryMode(..)
   )
 
 clientMessages :: MonadGen m => m ClientMessage
@@ -102,12 +103,17 @@ mailboxMessages = MailboxMessage <$> sides <*> phases <*> Gen.maybe messageIDs <
 welcomeMessages :: MonadGen m => m WelcomeMessage
 welcomeMessages = WelcomeMessage <$> Gen.maybe (Gen.text (Range.linear 0 1024) Gen.unicode) <*> Gen.maybe (Gen.text (Range.linear 0 1024) Gen.unicode)
 
+directoryModes :: MonadGen m => m F.DirectoryMode
+directoryModes = Gen.choice
+  [ return F.ZipFileDeflated
+  ]
+
 offerMessages :: MonadGen m => m F.Offer
 offerMessages = Gen.choice
   [ F.Message <$> (Gen.text (Range.linear 0 1024) Gen.unicode)
   , F.File <$> toS <$> (Gen.text (Range.linear 0 100) Gen.unicode)  <*> (fromIntegral <$> (Gen.int (Range.linear 0 maxBound)))
   , F.Directory
-    <$> (toS <$> (Gen.text (Range.linear 0 100) Gen.unicode))
+    <$> directoryModes -- (toS <$> (Gen.text (Range.linear 0 100) Gen.unicode))
     <*> (toS <$> (Gen.text (Range.linear 0 100) Gen.unicode))
     <*> (fromIntegral <$> (Gen.int (Range.linear 0 maxBound)))
     <*> (fromIntegral <$> (Gen.int (Range.linear 0 maxBound)))
