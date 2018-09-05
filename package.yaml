@@ -8,7 +8,7 @@ license: Apache
 github: jml/haskell-magic-wormhole
 category: Crypto
 
-ghc-options: -Wall
+ghc-options: -Wall -Werror=incomplete-patterns
 default-extensions:
   - NoImplicitPrelude
   - OverloadedStrings
@@ -34,7 +34,7 @@ library:
     - spake2 >= 0.4
     - stm
     - unordered-containers
-    - websockets
+    - websockets >= 0.8.0.0
 
 executables:
   hocus-pocus:
