@@ -76,6 +76,7 @@ module MagicWormhole
     -- However, Magic Wormhole comes with at least one built-in "application": message and file transfer.
     -- This Haskell implementation only supports sending and receiving a simple message.
   , FileTransfer.Offer(..)
+  , FileTransfer.DirectoryMode(..)
   ) where
 
 import qualified MagicWormhole.Internal.ClientProtocol as ClientProtocol
