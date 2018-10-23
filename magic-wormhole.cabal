@@ -2,17 +2,24 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 77c6758472588d9936e987e8939e12814ff09dfae918d614ce435b2ab9f59537
+-- hash: c3ace4c817265fed08798ca9d75f3f34218ace8530d9ee3a27378b3ca1a1d844
 
 name:           magic-wormhole
-version:        0.1.0
+version:        0.2.1
 synopsis:       Interact with Magic Wormhole
-description:    Honestly, who can say?
+description:    Magic Wormhole is a scheme to get things from one computer to another,
+                safely.
+                .
+                This is a library for client-side interactions with a Magic Wormhole server.
 category:       Crypto
-homepage:       https://github.com/jml/haskell-magic-wormhole#readme
-bug-reports:    https://github.com/jml/haskell-magic-wormhole/issues
-maintainer:     Jonathan M. Lange <jml@mumak.net>
+homepage:       https://github.com/leastauthority/haskell-magic-wormhole#readme
+bug-reports:    https://github.com/leastauthority/haskell-magic-wormhole/issues
+author:         Jonathan M. Lange <jml@mumak.net>,
+                Ramakrishnan Muthukrishnan <ram@leastauthority.com>,
+                Jean-Paul Calderone <jean-paul@leastauthority.com>
+maintainer:     Least Authority TFA GmbH
 license:        Apache
+license-file:   LICENSE
 build-type:     Simple
 cabal-version:  >= 1.10
 data-files:
@@ -23,7 +30,7 @@ data-files:
 
 source-repository head
   type: git
-  location: https://github.com/jml/haskell-magic-wormhole
+  location: https://github.com/leastauthority/haskell-magic-wormhole
 
 library
   hs-source-dirs:
@@ -32,7 +39,7 @@ library
   ghc-options: -Wall -Werror=incomplete-patterns
   build-depends:
       aeson
-    , base
+    , base >=4.6 && <=4.12
     , bytestring
     , containers
     , cryptonite
@@ -72,7 +79,7 @@ executable hocus-pocus
   ghc-options: -Wall -Werror=incomplete-patterns
   build-depends:
       aeson
-    , base
+    , base >=4.6 && <=4.12
     , magic-wormhole
     , optparse-applicative
     , protolude >=0.2
@@ -89,7 +96,7 @@ test-suite tasty
   ghc-options: -Wall -Werror=incomplete-patterns
   build-depends:
       aeson
-    , base
+    , base >=4.6 && <=4.12
     , bytestring
     , hedgehog
     , magic-wormhole
