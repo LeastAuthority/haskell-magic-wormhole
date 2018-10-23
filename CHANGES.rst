@@ -1,3 +1,8 @@
+0.2.1 (October 23 2018)
+=======================
+
+ * Loosened base version constraint
+
 0.2.0 (October 23 2018)
 =======================
 

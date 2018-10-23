@@ -14,6 +14,7 @@ Steps
   #. Bump version in package.yaml according to `PVP`_
   #. Update any other `package.yaml metadata`_ that needs it
   #. Run hpack
+  #. Update ``CHANGES.rst``
   #. Commit changes
   #. Generate sdist (ignore the warning about running "configure")::
        cabal sdist
