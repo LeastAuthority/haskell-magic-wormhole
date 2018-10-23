@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: d4d841f6a64840dce49a0e4c4c3c6bb880cd98dfe60c7e65758c33a0839bde22
+-- hash: 3a2a85332b9ac07d428909b84f1f5da71f10a56e76f8f0a7d015d10f2efe0847
 
 name:           magic-wormhole
 version:        0.2.0
@@ -19,6 +19,7 @@ author:         Jonathan M. Lange <jml@mumak.net>,
                 Jean-Paul Calderone <jean-paul@leastauthority.com>
 maintainer:     Least Authority TFA GmbH
 license:        Apache
+license-file:   LICENSE
 build-type:     Simple
 cabal-version:  >= 1.10
 data-files:

@@ -13,6 +13,7 @@ author:
   - "Jean-Paul Calderone <jean-paul@leastauthority.com>"
 maintainer: Least Authority TFA GmbH
 license: Apache
+license-file: LICENSE
 github: leastauthority/haskell-magic-wormhole
 category: Crypto
 
