@@ -3,6 +3,10 @@ version: 0.2.0
 synopsis: Interact with Magic Wormhole
 description: |
   Honestly, who can say?
+author:
+  - "Jonathan M. Lange <jml@mumak.net>"
+  - "Ramakrishnan Muthukrishnan <ram@leastauthority.com>"
+  - "Jean-Paul Calderone <jean-paul@leastauthority.com>"
 maintainer: Least Authority TFA GmbH
 license: Apache
 github: jml/haskell-magic-wormhole
