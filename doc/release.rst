@@ -31,6 +31,10 @@ Steps
        cabal upload --publish --username <Hackage username> --password <Hackage password> dist/magic-wormhole-$NEW_VERSION.tar.gz
        cabal upload --publish --documentation --username <Hackage username> --password <Hackage password> dist/magic-wormhole-$NEW_VERSION-docs.tar.gz
 
+  #. Tag the release on the release branch::
+       git tag v$NEW_VERSION
+       git push --tags
+
   #. Create a PR for the release branch and get it merged in to master.
 
 .. _Hackage: https://hackage.haskell.org/
