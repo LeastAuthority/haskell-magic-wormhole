@@ -2,16 +2,19 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 77c6758472588d9936e987e8939e12814ff09dfae918d614ce435b2ab9f59537
+-- hash: 6aca60d1113d3956c5853534c880fa4ca0187c889f3f77551d148c4b2b9e901f
 
 name:           magic-wormhole
-version:        0.1.0
+version:        0.2.0
 synopsis:       Interact with Magic Wormhole
 description:    Honestly, who can say?
 category:       Crypto
-homepage:       https://github.com/jml/haskell-magic-wormhole#readme
-bug-reports:    https://github.com/jml/haskell-magic-wormhole/issues
-maintainer:     Jonathan M. Lange <jml@mumak.net>
+homepage:       https://github.com/leastauthority/haskell-magic-wormhole#readme
+bug-reports:    https://github.com/leastauthority/haskell-magic-wormhole/issues
+author:         Jonathan M. Lange <jml@mumak.net>,
+                Ramakrishnan Muthukrishnan <ram@leastauthority.com>,
+                Jean-Paul Calderone <jean-paul@leastauthority.com>
+maintainer:     Least Authority TFA GmbH
 license:        Apache
 build-type:     Simple
 cabal-version:  >= 1.10
@@ -23,7 +26,7 @@ data-files:
 
 source-repository head
   type: git
-  location: https://github.com/jml/haskell-magic-wormhole
+  location: https://github.com/leastauthority/haskell-magic-wormhole
 
 library
   hs-source-dirs:
