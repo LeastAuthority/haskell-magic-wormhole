@@ -24,7 +24,7 @@ default-extensions:
   - TypeApplications
 
 dependencies:
-  - base
+  - base == 4.9.*
   - protolude >= 0.2
 
 library:

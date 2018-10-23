@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 3a2a85332b9ac07d428909b84f1f5da71f10a56e76f8f0a7d015d10f2efe0847
+-- hash: 70e0d0470150c88f241234f7c12f2f2e92a2dcc939f84e6da5db4c8ba17a06a5
 
 name:           magic-wormhole
 version:        0.2.0
@@ -39,7 +39,7 @@ library
   ghc-options: -Wall -Werror=incomplete-patterns
   build-depends:
       aeson
-    , base
+    , base ==4.9.*
     , bytestring
     , containers
     , cryptonite
@@ -79,7 +79,7 @@ executable hocus-pocus
   ghc-options: -Wall -Werror=incomplete-patterns
   build-depends:
       aeson
-    , base
+    , base ==4.9.*
     , magic-wormhole
     , optparse-applicative
     , protolude >=0.2
@@ -96,7 +96,7 @@ test-suite tasty
   ghc-options: -Wall -Werror=incomplete-patterns
   build-depends:
       aeson
-    , base
+    , base ==4.9.*
     , bytestring
     , hedgehog
     , magic-wormhole
