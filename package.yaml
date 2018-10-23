@@ -3,7 +3,7 @@ version: 0.2.0
 synopsis: Interact with Magic Wormhole
 description: |
   Honestly, who can say?
-maintainer: Jonathan M. Lange <jml@mumak.net>
+maintainer: Least Authority TFA GmbH
 license: Apache
 github: jml/haskell-magic-wormhole
 category: Crypto
