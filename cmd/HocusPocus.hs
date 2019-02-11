@@ -96,11 +96,11 @@ bounce :: MagicWormhole.WebSocketEndpoint -> MagicWormhole.AppID -> IO ()
 bounce endpoint appID = do
   side1 <- MagicWormhole.generateSide
   side2 <- MagicWormhole.generateSide
-  MagicWormhole.runClient endpoint appID side1 $ \session1 -> do
+  MagicWormhole.runClient endpoint appID side1 Nothing $ \session1 -> do
     nameplate <- MagicWormhole.allocate session1
     mailbox1 <- MagicWormhole.claim session1 nameplate
     peer1 <- MagicWormhole.open session1 mailbox1
-    MagicWormhole.runClient endpoint appID side2 $ \session2 -> do
+    MagicWormhole.runClient endpoint appID side2 Nothing $ \session2 -> do
       mailbox2 <- MagicWormhole.claim session2 nameplate
       peer2 <- MagicWormhole.open session2 mailbox2
       let message = "aoeu"
@@ -128,9 +128,9 @@ main = do
   side <- MagicWormhole.generateSide
   let endpoint = rendezvousEndpoint options
   case cmd options of
-    Send -> MagicWormhole.runClient endpoint appID side $ \session ->
+    Send -> MagicWormhole.runClient endpoint appID side Nothing $ \session ->
       sendText session "potato" "Brave new world that has such offers in it"
-    Receive -> MagicWormhole.runClient endpoint appID side $ \session -> do
+    Receive -> MagicWormhole.runClient endpoint appID side Nothing $ \session -> do
       message <- receiveText session
       putStr message
     Bounce -> bounce endpoint appID
