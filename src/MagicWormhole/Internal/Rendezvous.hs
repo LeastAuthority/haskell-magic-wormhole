@@ -105,7 +105,7 @@ runClient
   => WebSocketEndpoint -- ^ The websocket to connect to
   -> Messages.AppID -- ^ ID for your application (e.g. example.com/your-application)
   -> Messages.Side -- ^ Identifier for your side
-  -> Maybe Socket.Socket -- ^ Whether to use the given socket for the websocket connection
+  -> Maybe Socket.Socket -- ^ Just an existing socket to use or Nothing to create and use a new one
   -> (Session -> IO a) -- ^ Action to perform inside the Magic Wormhole session
   -> IO a -- ^ The result of the action
 runClient (WebSocketEndpoint host port path) appID side maybeSock app =
