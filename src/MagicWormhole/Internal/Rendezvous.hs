@@ -105,17 +105,22 @@ runClient
   => WebSocketEndpoint -- ^ The websocket to connect to
   -> Messages.AppID -- ^ ID for your application (e.g. example.com/your-application)
   -> Messages.Side -- ^ Identifier for your side
+  -> Maybe Socket.Socket -- ^ Whether to use the given socket for the websocket connection
   -> (Session -> IO a) -- ^ Action to perform inside the Magic Wormhole session
   -> IO a -- ^ The result of the action
-runClient (WebSocketEndpoint host port path) appID side app =
-  Socket.withSocketsDo . WS.runClient host port path $ \ws -> do
-    session <- atomically $ new ws appID side
-    (_, result) <- concurrently (readMessages session) (action ws session)
-    pure result
+runClient (WebSocketEndpoint host port path) appID side maybeSock app =
+  case maybeSock of
+    Nothing -> Socket.withSocketsDo . WS.runClient host port path $ runAction
+    Just sock -> Socket.withSocketsDo . WS.runClientWithSocket sock host path WS.defaultConnectionOptions [] $ runAction
   where
     action ws session = do
       bind session appID side
       app session `finally` WS.sendClose ws ("Connection closed connection" :: Text)
+
+    runAction ws = do
+      session <- atomically $ new ws appID side
+      (_, result) <- concurrently (readMessages session) (action ws session)
+      pure result
 
     -- | Read messages from the websocket forever, or until we fail to handle one.
     readMessages session = do
