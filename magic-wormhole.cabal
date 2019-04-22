@@ -39,7 +39,7 @@ library
   ghc-options: -Wall -Werror=incomplete-patterns
   build-depends:
       aeson
-    , base >=4.6 && <=4.12
+    , base >=4.6 && <5
     , bytestring
     , containers
     , cryptonite
@@ -79,7 +79,7 @@ executable hocus-pocus
   ghc-options: -Wall -Werror=incomplete-patterns
   build-depends:
       aeson
-    , base >=4.6 && <=4.12
+    , base >=4.6 && <5
     , magic-wormhole
     , optparse-applicative
     , protolude >=0.2
@@ -96,7 +96,7 @@ test-suite tasty
   ghc-options: -Wall -Werror=incomplete-patterns
   build-depends:
       aeson
-    , base >=4.6 && <=4.12
+    , base >=4.6 && <5
     , bytestring
     , hedgehog
     , magic-wormhole
