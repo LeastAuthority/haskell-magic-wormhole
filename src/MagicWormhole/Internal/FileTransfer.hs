@@ -70,6 +70,7 @@ instance FromJSON Offer where
            <*> (toEnum <$> ((offer .: "directory") >>= (.: "numfiles")))
          ]
 
+-- | Textual representation of the format in which the directory tree is encoded
 data DirectoryMode = ZipFileDeflated
   deriving (Eq, Show)
 
