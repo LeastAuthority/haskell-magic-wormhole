@@ -1,5 +1,5 @@
 name: magic-wormhole
-version: 0.2.1
+version: 0.3.0
 synopsis: Interact with Magic Wormhole
 description: |
   Magic Wormhole is a scheme to get things from one computer to another,
@@ -24,7 +24,7 @@ default-extensions:
   - TypeApplications
 
 dependencies:
-  - base >= 4.6 && <= 4.12
+  - base >= 4.6 && < 5
   - protolude >= 0.2
 
 library:
