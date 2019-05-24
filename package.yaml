@@ -1,5 +1,5 @@
 name: magic-wormhole
-version: 0.3.0
+version: 0.3.1
 synopsis: Interact with Magic Wormhole
 description: |
   Magic Wormhole is a scheme to get things from one computer to another,
@@ -63,7 +63,7 @@ tests:
     dependencies:
       - aeson
       - bytestring
-      - hedgehog
+      - hedgehog >= 0.6 && <1.0
       - magic-wormhole
       - memory
       - process
