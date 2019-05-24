@@ -1,3 +1,14 @@
+0.3.0 (May 06 2019)
+=======================
+
+ * ``Rendezvous.runClient`` takes an extra parameter to pass an optional
+    externally created socket for the websocket server. This is useful
+    for running the protocol via a proxy like the tor program, which
+    exposes a socks proxy.
+ *  Upper bound of the ``base`` library dependency relaxed so that the
+    library builds with newer releases of GHC which comes bundled with
+    corresponding versions of the ``base`` library.
+
 0.2.1 (October 23 2018)
 =======================
 
