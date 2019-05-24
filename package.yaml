@@ -24,7 +24,7 @@ default-extensions:
   - TypeApplications
 
 dependencies:
-  - base >= 4.6 && < 5
+  - base >= 4.10 && < 5
   - protolude >= 0.2
 
 library:
@@ -71,7 +71,7 @@ tests:
       - spake2 >= 0.3
       - stm
       - tasty
-      - tasty-hedgehog
+      - tasty-hedgehog >= 0.2 && <1.0
       - tasty-hspec
 
 # These are only for tests.
