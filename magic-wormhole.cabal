@@ -2,10 +2,10 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: d5843adf2d905615868595b5f029928ab5597c2e96bee9b8f38b9ac2ad9193e7
+-- hash: 0cc0b02c374ffb78d0b550974bceddbd5afe9382a0fc07d75306827157e5e414
 
 name:           magic-wormhole
-version:        0.3.1
+version:        0.3.2
 synopsis:       Interact with Magic Wormhole
 description:    Magic Wormhole is a scheme to get things from one computer to another,
                 safely.
