@@ -1,3 +1,8 @@
+0.3.1 (May 24 2019)
+=======================
+
+*  specify hedgehog version bounds, since hedgehog 1.0 breaks tests.
+
 0.3.0 (May 06 2019)
 =======================
 

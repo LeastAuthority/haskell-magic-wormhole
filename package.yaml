@@ -1,5 +1,5 @@
 name: magic-wormhole
-version: 0.3.0
+version: 0.3.1
 synopsis: Interact with Magic Wormhole
 description: |
   Magic Wormhole is a scheme to get things from one computer to another,
@@ -24,7 +24,7 @@ default-extensions:
   - TypeApplications
 
 dependencies:
-  - base >= 4.6 && < 5
+  - base >= 4.10 && < 5
   - protolude >= 0.2
 
 library:
@@ -63,7 +63,7 @@ tests:
     dependencies:
       - aeson
       - bytestring
-      - hedgehog
+      - hedgehog >= 0.6 && <1.0
       - magic-wormhole
       - memory
       - process
@@ -71,7 +71,7 @@ tests:
       - spake2 >= 0.3
       - stm
       - tasty
-      - tasty-hedgehog
+      - tasty-hedgehog >= 0.2 && <1.0
       - tasty-hspec
 
 # These are only for tests.
