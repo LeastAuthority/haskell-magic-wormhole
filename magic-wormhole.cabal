@@ -2,10 +2,10 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 0cc0b02c374ffb78d0b550974bceddbd5afe9382a0fc07d75306827157e5e414
+-- hash: 4734e9879f3640e17bc21f36a81592698c5c136e6046390958f24fbf41c1b0d7
 
 name:           magic-wormhole
-version:        0.3.2
+version:        0.3.3
 synopsis:       Interact with Magic Wormhole
 description:    Magic Wormhole is a scheme to get things from one computer to another,
                 safely.
@@ -39,7 +39,7 @@ library
   ghc-options: -Wall -Werror=incomplete-patterns
   build-depends:
       aeson
-    , base >=4.10 && <5
+    , base >=4.6 && <5
     , bytestring
     , containers
     , cryptonite
@@ -79,7 +79,7 @@ executable hocus-pocus
   ghc-options: -Wall -Werror=incomplete-patterns
   build-depends:
       aeson
-    , base >=4.10 && <5
+    , base >=4.6 && <5
     , magic-wormhole
     , optparse-applicative
     , protolude >=0.2
@@ -96,7 +96,7 @@ test-suite tasty
   ghc-options: -Wall -Werror=incomplete-patterns
   build-depends:
       aeson
-    , base >=4.10 && <5
+    , base >=4.6 && <5
     , bytestring
     , hedgehog >=0.6 && <1.0
     , magic-wormhole

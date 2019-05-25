@@ -1,3 +1,9 @@
+0.3.3 (May 25 2019)
+=======================
+
+* relax the lower bound of ``base`` library version that was erroneously
+  raised while debugging a build failure.
+
 0.3.2 (May 24 2019)
 =======================
 
