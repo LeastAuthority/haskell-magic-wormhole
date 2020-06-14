@@ -64,7 +64,7 @@ tests:
     dependencies:
       - aeson
       - bytestring
-      - hedgehog >= 0.6 && <1.0
+      - hedgehog >= 0.6
       - magic-wormhole
       - memory
       - process
@@ -72,7 +72,7 @@ tests:
       - spake2 >= 0.3
       - stm
       - tasty
-#      - tasty-hedgehog >= 0.2
+      - tasty-hedgehog >= 0.2
       - tasty-hspec
 
 # These are only for tests.
