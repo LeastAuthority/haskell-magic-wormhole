@@ -17,6 +17,7 @@ import Data.Aeson (FromJSON, ToJSON, (.=), object, Value(..), (.:))
 import Data.Aeson.Types (typeMismatch)
 import qualified Data.Aeson as Aeson
 import Data.String (String)
+import qualified Data.ByteString.Lazy as LB
 
 import qualified MagicWormhole.Internal.ClientProtocol as ClientProtocol
 import qualified MagicWormhole.Internal.Messages as Messages
@@ -42,11 +43,11 @@ versionExchange conn key = do
   (_, theirVersions) <- concurrently sendVersion (atomically receiveVersion)
   if theirVersions /= Versions then throwIO VersionMismatch else pure Versions
   where
-    sendVersion = ClientProtocol.sendEncrypted conn key Messages.VersionPhase (ClientProtocol.PlainText (toS (Aeson.encode Versions)))
+    sendVersion = ClientProtocol.sendEncrypted conn key Messages.VersionPhase (ClientProtocol.PlainText (LB.toStrict (Aeson.encode Versions)))
     receiveVersion = do
       (phase, ClientProtocol.PlainText plaintext) <- ClientProtocol.receiveEncrypted conn key
       unless (phase == Messages.VersionPhase) retry
-      either (throwSTM . ParseError) pure $ Aeson.eitherDecode (toS plaintext)
+      either (throwSTM . ParseError) pure $ Aeson.eitherDecode (LB.fromStrict plaintext)
 
 -- | Information about the versions supported by this Magic Wormhole client.
 --

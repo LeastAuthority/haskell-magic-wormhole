@@ -27,6 +27,7 @@ import qualified System.IO as IO
 import qualified System.Process as Process
 import Test.Tasty (TestTree)
 import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
+import qualified Data.ByteString.Lazy as BL
 
 import qualified Crypto.Spake2 as Spake2
 import qualified MagicWormhole.Internal.ClientProtocol as ClientProtocol
@@ -47,7 +48,7 @@ tests = testSpec "Integration" $ do
       let theirSide = "saruman"
       interactWithPython "tests/python/spake2_exchange.py"
         [ "--app-id=" <> toS appID
-        , "--code=" <> toS password
+        , "--code=" <> Char8.unpack password
         , "--side=" <> theirSide
         ] $ \stdin stdout -> do
           ClientProtocol.SessionKey sessionKey <- withConnection (Messages.AppID appID) (Messages.Side ourSide) stdin stdout $ \conn ->
@@ -64,7 +65,7 @@ tests = testSpec "Integration" $ do
                         (ClientProtocol.SessionKey fakeSpakeKey)
                         (ClientProtocol.phasePurpose (Messages.Side side) phase)
       interactWithPython "tests/python/derive_phase_key.py"
-        [ "--spake-key=" <> toS (convertToBase Base16 fakeSpakeKey :: ByteString)
+        [ "--spake-key=" <> Char8.unpack (convertToBase Base16 fakeSpakeKey :: ByteString)
         , "--side=" <> toS side
         , "--phase=" <> toS (Messages.phaseName phase)
         ] $ \_stdin stdout -> do
@@ -80,7 +81,7 @@ tests = testSpec "Integration" $ do
       interactWithPython "tests/python/version_exchange.py"
         [ "--app-id=" <> toS appID
         , "--side=" <> toS otherSide
-        , "--code=" <> toS password
+        , "--code=" <> Char8.unpack password
         ] $ \stdin stdout -> do
           versions <- withConnection (Messages.AppID appID) (Messages.Side ourSide) stdin stdout $ \conn -> do
             sessionKey <- Pake.pakeExchange conn password'
@@ -92,8 +93,8 @@ tests = testSpec "Integration" $ do
       key <- SecretBox.newKey
       nonce <- SecretBox.newNonce
       interactWithPython "tests/python/nacl_exchange.py"
-        [ "--key=" <> toS (convertToBase Base16 (Saltine.encode key) :: ByteString)
-        , "--nonce=" <> toS (convertToBase Base16 (Saltine.encode nonce) :: ByteString)
+        [ "--key=" <> Char8.unpack (convertToBase Base16 (Saltine.encode key) :: ByteString)
+        , "--nonce=" <> Char8.unpack (convertToBase Base16 (Saltine.encode nonce) :: ByteString)
         ] $ \stdin stdout -> do
           let message = ClientProtocol.PlainText "Hello world!"
           ClientProtocol.CipherText encryptedByUs <- ClientProtocol.encrypt key message
@@ -159,7 +160,7 @@ withConnection appID ourSide stdin stdout action = do
 readMailboxMessage :: HasCallStack => Handle -> IO Messages.MailboxMessage
 readMailboxMessage h = do
   line <- ByteString.hGetLine h
-  case Aeson.eitherDecode (toS line) of
+  case Aeson.eitherDecode (BL.fromStrict line) of
     Left err -> do
       hPutStrLn stderr $ "Could not decode line: " <> line
       panic (toS err)

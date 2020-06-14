@@ -211,10 +211,10 @@ newtype Mailbox = Mailbox Text deriving (Eq, Show, ToJSON, FromJSON)
 newtype Body = Body ByteString deriving (Eq, Show)
 
 instance ToJSON Body where
-  toJSON (Body bytes) = toJSON (toS @ByteString @Text (convertToBase Base16 bytes))
+  toJSON (Body bytes) = toJSON (decodeUtf8 (convertToBase Base16 bytes))
 
 instance FromJSON Body where
-  parseJSON (String s) = either fail (pure . Body) (convertFromBase Base16 (toS @Text @ByteString s))
+  parseJSON (String s) = either fail (pure . Body) (convertFromBase Base16 (encodeUtf8 s))
   parseJSON x = typeMismatch "Body" x
 
 -- | A message sent from a rendezvous client to the server.
@@ -303,7 +303,7 @@ newtype Side = Side Text deriving (Eq, Show, FromJSON, ToJSON)
 generateSide :: MonadRandom randomly => randomly Side
 generateSide = do
   randomBytes <- getRandomBytes 5
-  pure . Side . toS @ByteString . convertToBase Base16 $ (randomBytes :: ByteString)
+  pure . Side . decodeUtf8 . convertToBase Base16 $ (randomBytes :: ByteString)
 
 -- | How the client feels. Reported by the client to the server at the end of
 -- a wormhole session.

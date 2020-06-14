@@ -137,8 +137,8 @@ deriveKey (SessionKey key) purpose =
 phasePurpose :: Messages.Side -> Messages.Phase -> Purpose
 phasePurpose (Messages.Side side) phase = "wormhole:phase:" <> sideHashDigest <> phaseHashDigest
   where
-    sideHashDigest = hashDigest (toS @Text @ByteString side)
-    phaseHashDigest = hashDigest (toS (Messages.phaseName phase) :: ByteString)
+    sideHashDigest = hashDigest (encodeUtf8 side)
+    phaseHashDigest = hashDigest (encodeUtf8 (Messages.phaseName phase) :: ByteString)
     hashDigest thing = ByteArray.convert (hashWith SHA256 thing)
 
 -- | Something that went wrong with the client protocol.
