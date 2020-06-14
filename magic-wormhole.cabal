@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 0133fce83a78a738c02f14d7ad4bdd23b11db7685d34140504a5e197409540a0
+-- hash: e0bf769653ba0605f29ba3fcd57c140a942bea5f91223a2527cee5f7e44c3b86
 
 name:           magic-wormhole
 version:        0.3.3
@@ -40,7 +40,7 @@ library
   ghc-options: -Wall -Werror=incomplete-patterns
   build-depends:
       aeson
-    , base >=4.6 && <5
+    , base >=4.8 && <5
     , bytestring
     , containers
     , cryptonite
@@ -58,17 +58,11 @@ library
   exposed-modules:
       MagicWormhole
       MagicWormhole.Internal.ClientProtocol
-      MagicWormhole.Internal.ClientProtocol_flymake
       MagicWormhole.Internal.FileTransfer
-      MagicWormhole.Internal.FileTransfer_flymake
       MagicWormhole.Internal.Messages
-      MagicWormhole.Internal.Messages_flymake
       MagicWormhole.Internal.Pake
-      MagicWormhole.Internal.Pake_flymake
       MagicWormhole.Internal.Peer
-      MagicWormhole.Internal.Peer_flymake
       MagicWormhole.Internal.Rendezvous
-      MagicWormhole.Internal.Rendezvous_flymake
       MagicWormhole.Internal.Sequential
       MagicWormhole.Internal.Versions
       MagicWormhole.Internal.WebSockets
@@ -79,7 +73,6 @@ library
 executable hocus-pocus
   main-is: HocusPocus.hs
   other-modules:
-      HocusPocus_flymake
       Paths_magic_wormhole
   hs-source-dirs:
       cmd
@@ -87,7 +80,7 @@ executable hocus-pocus
   ghc-options: -Wall -Werror=incomplete-patterns
   build-depends:
       aeson
-    , base >=4.6 && <5
+    , base >=4.8 && <5
     , bytestring
     , magic-wormhole
     , optparse-applicative
@@ -105,10 +98,9 @@ test-suite tasty
   ghc-options: -Wall -Werror=incomplete-patterns
   build-depends:
       aeson
-    , base >=4.6 && <5
+    , base >=4.8 && <5
     , bytestring
-    , bytestring
-    , hedgehog >=0.6
+    , hedgehog >=0.6 && <1.0
     , magic-wormhole
     , memory
     , process
@@ -117,7 +109,6 @@ test-suite tasty
     , spake2 >=0.3
     , stm
     , tasty
-    , tasty-hedgehog >=0.2
     , tasty-hspec
   other-modules:
       ClientProtocol

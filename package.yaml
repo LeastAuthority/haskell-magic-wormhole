@@ -24,7 +24,7 @@ default-extensions:
   - TypeApplications
 
 dependencies:
-  - base >= 4.6 && < 5
+  - base >= 4.8 && < 5
   - protolude >= 0.3
 
 library:
@@ -51,6 +51,7 @@ executables:
     source-dirs: cmd
     dependencies:
       - aeson
+      - bytestring
       - magic-wormhole
       - optparse-applicative
       - spake2 >= 0.4
@@ -71,7 +72,7 @@ tests:
       - spake2 >= 0.3
       - stm
       - tasty
-      - tasty-hedgehog >= 0.2 && <1.0
+#      - tasty-hedgehog >= 0.2
       - tasty-hspec
 
 # These are only for tests.
