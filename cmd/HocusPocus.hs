@@ -11,6 +11,7 @@ import qualified Options.Applicative as Opt
 import qualified Crypto.Spake2 as Spake2
 import qualified Data.Aeson as Aeson
 import qualified Data.Text as Text
+import qualified Data.ByteString.Lazy as BL
 
 import qualified MagicWormhole
 
@@ -65,10 +66,10 @@ sendText session password message = do
   mailbox <- MagicWormhole.claim session nameplate
   peer <- MagicWormhole.open session mailbox  -- XXX: We should run `close` in the case of exceptions?
   let (MagicWormhole.Nameplate n) = nameplate
-  MagicWormhole.withEncryptedConnection peer (Spake2.makePassword (toS n <> "-" <> password))
+  MagicWormhole.withEncryptedConnection peer (Spake2.makePassword (encodeUtf8 n <> "-" <> password))
     (\conn -> do
         let offer = MagicWormhole.Message message
-        MagicWormhole.sendMessage conn (MagicWormhole.PlainText (toS (Aeson.encode offer))))
+        MagicWormhole.sendMessage conn (MagicWormhole.PlainText (BL.toStrict (Aeson.encode offer))))
 
 -- | Receive a text message from a Magic Wormhole peer.
 receiveText :: MagicWormhole.Session -> IO Text
@@ -81,11 +82,11 @@ receiveText session = do
   peer <- MagicWormhole.open session mailbox
   putText "Password: "
   password <- getLine
-  let fullPassword = toS nameplate <> "-" <> toS password
-  MagicWormhole.withEncryptedConnection peer (Spake2.makePassword fullPassword)
+  let fullPassword = nameplate <> "-" <> password
+  MagicWormhole.withEncryptedConnection peer (Spake2.makePassword (encodeUtf8 fullPassword))
     (\conn -> do
         MagicWormhole.PlainText received <- atomically $ MagicWormhole.receiveMessage conn
-        case Aeson.eitherDecode (toS received) of
+        case Aeson.eitherDecode (BL.fromStrict received) of
           Left err -> panic $ "Could not decode message: " <> show err
           Right (MagicWormhole.Message message) -> pure message
           Right (MagicWormhole.File _ _) -> pure $ "File transfer is not supported"
@@ -109,11 +110,11 @@ bounce endpoint appID = do
   where
     send peer message = MagicWormhole.withEncryptedConnection peer password $ \conn -> do
       let offer = MagicWormhole.Message message
-      MagicWormhole.sendMessage conn (MagicWormhole.PlainText (toS (Aeson.encode offer)))
+      MagicWormhole.sendMessage conn (MagicWormhole.PlainText (BL.toStrict (Aeson.encode offer)))
 
     receive peer = MagicWormhole.withEncryptedConnection peer password $ \conn -> do
       MagicWormhole.PlainText received <- atomically $ MagicWormhole.receiveMessage conn
-      case Aeson.eitherDecode (toS received) of
+      case Aeson.eitherDecode (BL.fromStrict received) of
         Left err -> panic $ "Could not decode message: " <> show err
         Right (MagicWormhole.Message message) -> pure message
         Right (MagicWormhole.File _ _) -> pure $ "File transfer is not supported"
