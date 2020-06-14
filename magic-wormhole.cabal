@@ -1,8 +1,10 @@
--- This file has been generated from package.yaml by hpack version 0.28.2.
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.33.0.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 4734e9879f3640e17bc21f36a81592698c5c136e6046390958f24fbf41c1b0d7
+-- hash: 0133fce83a78a738c02f14d7ad4bdd23b11db7685d34140504a5e197409540a0
 
 name:           magic-wormhole
 version:        0.3.3
@@ -21,7 +23,6 @@ maintainer:     Least Authority TFA GmbH
 license:        Apache
 license-file:   LICENSE
 build-type:     Simple
-cabal-version:  >= 1.10
 data-files:
     tests/python/derive_phase_key.py
     tests/python/nacl_exchange.py
@@ -57,11 +58,17 @@ library
   exposed-modules:
       MagicWormhole
       MagicWormhole.Internal.ClientProtocol
+      MagicWormhole.Internal.ClientProtocol_flymake
       MagicWormhole.Internal.FileTransfer
+      MagicWormhole.Internal.FileTransfer_flymake
       MagicWormhole.Internal.Messages
+      MagicWormhole.Internal.Messages_flymake
       MagicWormhole.Internal.Pake
+      MagicWormhole.Internal.Pake_flymake
       MagicWormhole.Internal.Peer
+      MagicWormhole.Internal.Peer_flymake
       MagicWormhole.Internal.Rendezvous
+      MagicWormhole.Internal.Rendezvous_flymake
       MagicWormhole.Internal.Sequential
       MagicWormhole.Internal.Versions
       MagicWormhole.Internal.WebSockets
@@ -72,6 +79,7 @@ library
 executable hocus-pocus
   main-is: HocusPocus.hs
   other-modules:
+      HocusPocus_flymake
       Paths_magic_wormhole
   hs-source-dirs:
       cmd
