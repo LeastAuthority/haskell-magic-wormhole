@@ -5,5 +5,4 @@ packages:
 
 extra-deps:
 - spake2-0.4.2
-- tasty-hedgehog-0.2.0.0
 - protolude-0.3.0@sha256:8361b811b420585b122a7ba715aa5923834db6e8c36309bf267df2dbf66b95ef,2693
