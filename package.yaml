@@ -25,7 +25,7 @@ default-extensions:
 
 dependencies:
   - base >= 4.6 && < 5
-  - protolude >= 0.3
+  - protolude >= 0.3.0
 
 library:
   source-dirs: src
