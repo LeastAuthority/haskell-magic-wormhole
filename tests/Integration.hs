@@ -7,7 +7,8 @@
 -- * if magic-wormhole is not present, these tests will pass
 module Integration (tests) where
 
-import Protolude hiding (phase, stdin, stdout)
+import Protolude hiding (phase, stdin, stdout, toS)
+import Protolude.Conv (toS)
 
 import Control.Concurrent.STM.TChan
   ( newTChan
