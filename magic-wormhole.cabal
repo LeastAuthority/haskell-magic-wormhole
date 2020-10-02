@@ -4,8 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 273916dc30dc0c12dd3ff23ca23a6303ae69f601f17b94ff7099b3b704184a0c
-
+-- hash: 273916dc30dc0c12dd3ff23ca23a6303ae69f601f17b94ff7099b3b704184a
 name:           magic-wormhole
 version:        0.3.3
 synopsis:       Interact with Magic Wormhole
@@ -99,7 +98,7 @@ test-suite tasty
       aeson
     , base >=4.6 && <5
     , bytestring
-    , hedgehog >=0.6 && <1.0
+    , hedgehog >=1.0
     , magic-wormhole
     , memory
     , process
@@ -108,7 +107,7 @@ test-suite tasty
     , spake2 >=0.3
     , stm
     , tasty
-    , tasty-hedgehog >=0.2 && <1.0
+    , tasty-hedgehog >=1.0.0
     , tasty-hspec
   other-modules:
       ClientProtocol
