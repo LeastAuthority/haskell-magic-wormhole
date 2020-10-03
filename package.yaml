@@ -25,7 +25,7 @@ default-extensions:
 
 dependencies:
   - base >= 4.6 && < 5
-  - protolude >= 0.2
+  - protolude >= 0.3.0
 
 library:
   source-dirs: src
@@ -63,7 +63,7 @@ tests:
     dependencies:
       - aeson
       - bytestring
-      - hedgehog >= 0.6 && <1.0
+      - hedgehog >= 1.0
       - magic-wormhole
       - memory
       - process
@@ -71,7 +71,7 @@ tests:
       - spake2 >= 0.3
       - stm
       - tasty
-      - tasty-hedgehog >= 0.2 && <1.0
+      - tasty-hedgehog >= 1.0.0
       - tasty-hspec
 
 # These are only for tests.

@@ -22,7 +22,8 @@ module MagicWormhole.Internal.ClientProtocol
   , phasePurpose
   ) where
 
-import Protolude hiding (phase)
+import Protolude hiding (phase, toS)
+import Protolude.Conv (toS)
 
 import Crypto.Hash (SHA256(..), hashWith)
 import qualified Crypto.KDF.HKDF as HKDF
