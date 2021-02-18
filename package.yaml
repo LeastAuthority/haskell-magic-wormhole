@@ -40,7 +40,7 @@ library:
     - network-uri
     - pqueue
     - saltine
-    - spake2 >= 0.4
+    - spake2 >= 0.4.3
     - stm
     - unordered-containers
     - websockets >= 0.8.0.0
@@ -53,7 +53,7 @@ executables:
       - aeson
       - magic-wormhole
       - optparse-applicative
-      - spake2 >= 0.4
+      - spake2 >= 0.4.3
       - text
 
 tests:
@@ -68,7 +68,7 @@ tests:
       - memory
       - process
       - saltine
-      - spake2 >= 0.3
+      - spake2 >= 0.4.3
       - stm
       - tasty
       - tasty-hedgehog >= 0.2 && <1.0

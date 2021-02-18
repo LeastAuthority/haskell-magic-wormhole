@@ -4,6 +4,6 @@ packages:
   - .
 
 extra-deps:
-- spake2-0.4.2
 - tasty-hedgehog-0.2.0.0
+- spake2-0.4.3@sha256:037ca234601edaea619b8fda27d0035a9be85d60c8ac55051d9cae7cbbeae2c3,2561
 
