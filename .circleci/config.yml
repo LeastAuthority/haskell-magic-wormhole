@@ -56,11 +56,11 @@ jobs:
           command: apt-get install -y gcc python-dev libssl-dev libffi-dev
       - run:
           name: Create virtualenv
-          command: virtualenv testing-venv
+          command: virtualenv --python=python3 testing-venv
       - run:
           name: Install setuptools
           command:
-            testing-venv/bin/pip install --upgrade 'setuptools<45.0.0'
+            testing-venv/bin/pip3 install --upgrade 'setuptools<45.0.0'
       - run:
           name: Install dependencies
           command:
