@@ -41,7 +41,7 @@ jobs:
           command: apt-get install -y python3-virtualenv
       - run:
           name: Install Python build deps
-          command: apt-get install -y gcc python-dev libssl-dev libffi-dev
+          command: apt-get install -y gcc python3-dev libssl-dev libffi-dev
       - run:
           name: Create virtualenv
           command: virtualenv testing-venv
