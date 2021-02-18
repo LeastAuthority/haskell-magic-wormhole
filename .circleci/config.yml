@@ -49,9 +49,12 @@ jobs:
           name: Create virtualenv
           command: virtualenv testing-venv
       - run:
+          name: Install setuptools
+          command:
+            testing-venv/bin/pip install --upgrade 'setuptools<45.0.0'
+      - run:
           name: Install dependencies
           command:
-            pip install --upgrade 'setuptools<45.0.0'
             testing-venv/bin/pip install -r requirements.txt
       - run:
           name: Tests
