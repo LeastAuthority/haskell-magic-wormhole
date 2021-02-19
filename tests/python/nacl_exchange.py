@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 """Decrypt and then re-encrypt a message using NaCl."""
 
 import attr

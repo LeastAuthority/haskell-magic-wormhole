@@ -1,4 +1,5 @@
-#!/usr/bin/python
+#!/usr/bin/env python
+
 """Exchange SPAKE2 keys and print out the session key.
 
 This does the ``pake`` phase of the magic-wormhole client over stdin and

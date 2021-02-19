@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 """Derive a one-off key for NaCl given a SPAKE2 key."""
 
 import argparse

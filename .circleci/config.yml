@@ -37,15 +37,6 @@ jobs:
             - /root/.stack
             - .stack-work
       - run:
-          name: fetch get-pip to install pip that is compatible with python 3.5
-          command: wget https://bootstrap.pypa.io/3.4/get-pip.py
-      - run:
-          name: Make pip executable
-          command: chmod +x ./get-pip.py
-      - run:
-          name: Install pip
-          command: ./get-pip.py
-      - run:
           name: Install virtualenv
           command: apt-get install -y virtualenv
       - run:

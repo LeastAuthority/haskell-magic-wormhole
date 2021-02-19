@@ -1,4 +1,5 @@
-#!/usr/bin/python
+#!/usr/bin/env python
+
 """Exchange SPAKE2 keys and versions.
 
 This is a fake magic-wormhole client that receives messages from STDIN and
