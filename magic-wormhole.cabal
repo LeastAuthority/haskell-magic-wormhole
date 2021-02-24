@@ -1,8 +1,10 @@
--- This file has been generated from package.yaml by hpack version 0.28.2.
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.34.2.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 4734e9879f3640e17bc21f36a81592698c5c136e6046390958f24fbf41c1b0d7
+-- hash: 6543da6a90e08ed0d2b80d06eafe8ade39c7be1a6213f9e6a33e0dcf586d9fde
 
 name:           magic-wormhole
 version:        0.3.3
@@ -21,7 +23,6 @@ maintainer:     Least Authority TFA GmbH
 license:        Apache
 license-file:   LICENSE
 build-type:     Simple
-cabal-version:  >= 1.10
 data-files:
     tests/python/derive_phase_key.py
     tests/python/nacl_exchange.py
@@ -48,9 +49,9 @@ library
     , network
     , network-uri
     , pqueue
-    , protolude >=0.2
+    , protolude >=0.3.0 && <0.4
     , saltine
-    , spake2 >=0.4
+    , spake2 >=0.4.3
     , stm
     , unordered-containers
     , websockets >=0.8.0.0
@@ -82,8 +83,8 @@ executable hocus-pocus
     , base >=4.6 && <5
     , magic-wormhole
     , optparse-applicative
-    , protolude >=0.2
-    , spake2 >=0.4
+    , protolude >=0.3.0 && <0.4
+    , spake2 >=0.4.3
     , text
   default-language: Haskell2010
 
@@ -102,9 +103,9 @@ test-suite tasty
     , magic-wormhole
     , memory
     , process
-    , protolude >=0.2
+    , protolude >=0.3.0 && <0.4
     , saltine
-    , spake2 >=0.3
+    , spake2 >=0.4.3
     , stm
     , tasty
     , tasty-hedgehog >=0.2 && <1.0

@@ -38,18 +38,29 @@ jobs:
             - .stack-work
       - run:
           name: Install virtualenv
-          command: apt-get install -y python-virtualenv
+          command: apt-get install -y virtualenv
+      - run:
+          name: Setup Environment variable to not use Rust
+          command: export CRYPTOGRAPHY_DONT_BUILD_RUST=1
       - run:
           name: Install Python build deps
           command: apt-get install -y gcc python-dev libssl-dev libffi-dev
       - run:
           name: Create virtualenv
-          command: virtualenv testing-venv
+          command: virtualenv --python=python3 testing-venv
       - run:
-          name: Install dependencies
-          command: testing-venv/bin/pip install -r requirements.txt
-      - run:
-          name: Tests
+          name: enter into virtualenv and executing commands
           command: |
-            . testing-venv/bin/activate
-            stack test --skip-ghc-check --no-terminal magic-wormhole
+             source testing-venv/bin/activate
+             echo "fetch get-pip to install pip that is compatible with python 3.5"
+             wget https://bootstrap.pypa.io/3.4/get-pip.py
+             echo "Make pip executable"
+             chmod +x ./get-pip.py
+             echo "Install pip"
+             ./get-pip.py
+             echo "Install older version of setuptools to work around a bug with Python 3.5"
+             pip install --upgrade 'setuptools<45.0.0'
+             echo "Install dependencies"
+             pip install -r requirements.txt
+             echo "run Tests"
+             stack test --skip-ghc-check --no-terminal magic-wormhole

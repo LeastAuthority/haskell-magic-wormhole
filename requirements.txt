@@ -2,7 +2,7 @@
 #
 # None of the versions chosen are special,
 # we are just freezing dependencies so other people doing stuff doesn't break our CI.
-attrs==17.3.0
+attrs==20.3.0
 magic-wormhole==0.10.3
 twisted==17.9.0
 pynacl==1.2.0

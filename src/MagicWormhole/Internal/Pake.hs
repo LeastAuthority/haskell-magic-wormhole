@@ -14,7 +14,8 @@ module MagicWormhole.Internal.Pake
   , messageBodyToSpakeBytes
   ) where
 
-import Protolude
+import Protolude hiding (toS)
+import Protolude.Conv (toS)
 
 import Control.Monad (fail)
 import Crypto.Hash (SHA256(..))

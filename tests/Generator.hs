@@ -10,7 +10,8 @@ module Generator
   , offerMessages
   ) where
 
-import Protolude
+import Protolude hiding (toS)
+import Protolude.Conv (toS)
 
 import Hedgehog (MonadGen(..))
 import qualified Hedgehog.Gen as Gen

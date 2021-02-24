@@ -4,7 +4,8 @@
 -- [magic-wormhole](https://github.com/warner/magic-wormhole).
 module Main (main) where
 
-import Protolude
+import Protolude hiding (toS)
+import Protolude.Conv (toS)
 
 import qualified Options.Applicative as Opt
 

@@ -11,7 +11,8 @@ module MagicWormhole.Internal.Versions
     , VersionsError(..)
     ) where
 
-import Protolude hiding (phase)
+import Protolude hiding (phase, toS)
+import Protolude.Conv (toS)
 
 import Data.Aeson (FromJSON, ToJSON, (.=), object, Value(..), (.:))
 import Data.Aeson.Types (typeMismatch)
