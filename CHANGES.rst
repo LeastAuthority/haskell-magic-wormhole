@@ -1,3 +1,9 @@
+0.3.4 (Feb 25 2021)
+=======================
+
+* fixes the broken build caused by newer versions of protolude.
+* integration tests scripts works with Python3.
+
 0.3.3 (May 25 2019)
 =======================
 
