@@ -22,7 +22,7 @@ import sys
 try:
     import wormhole
 except ImportError as e:
-    print "Could not find Magic Wormhole: %s" % (e,)
+    print("Could not find Magic Wormhole: %s" % (e,))
     sys.exit(0)
 
 from wormhole._key import decrypt_data, encrypt_data, derive_phase_key
@@ -35,13 +35,13 @@ wormhole  # Be still, pyflakes
 def main():
     parser = argparse.ArgumentParser(prog='version_exchange')
     parser.add_argument(
-        '--code', dest='code', type=unicode,
+        '--code', dest='code', type=str,
         help='Password to use to connect to other side')
     parser.add_argument(
-        '--side', dest='side', type=unicode,
+        '--side', dest='side', type=str,
         help='Identifier for this side of the exchange')
     parser.add_argument(
-        '--app-id', dest='app_id', type=unicode,
+        '--app-id', dest='app_id', type=str,
         help='Identifier for the application')
     params = parser.parse_args(sys.argv[1:])
     transport = Transport(input_stream=sys.stdin, output_stream=sys.stdout)
@@ -54,7 +54,7 @@ def run_exchange(transport, code, app_id, side):
         util.to_bytes(code), idSymmetric=util.to_bytes(app_id))
     outbound = spake.start()
     transport.send_json({
-        'phase': u'pake',
+        'phase': 'pake',
         'body': util.bytes_to_hexstr(
             util.dict_to_bytes({
                 'pake_v1': util.bytes_to_hexstr(outbound),
@@ -74,7 +74,7 @@ def run_exchange(transport, code, app_id, side):
     spake_key = spake.finish(inbound)
 
     # Send the versions message
-    version_phase = u'version'
+    version_phase = 'version'
     transport.send_json({
         'phase': version_phase,
         'body': util.bytes_to_hexstr(

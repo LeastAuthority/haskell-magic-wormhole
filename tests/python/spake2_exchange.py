@@ -18,7 +18,7 @@ import sys
 try:
     import wormhole
 except ImportError as e:
-    print "Could not find Magic Wormhole: %s" % (e,)
+    print("Could not find Magic Wormhole: %s" % (e,))
     sys.exit(0)
 
 from wormhole import util
@@ -30,13 +30,13 @@ wormhole  # Be still, pyflakes
 def main():
     parser = argparse.ArgumentParser(prog='spake2_exchange')
     parser.add_argument(
-        '--code', dest='code', type=unicode,
+        '--code', dest='code', type=str,
         help='Password to use to connect to other side')
     parser.add_argument(
-        '--side', dest='side', type=unicode,
+        '--side', dest='side', type=str,
         help='Identifier for this side of the exchange')
     parser.add_argument(
-        '--app-id', dest='app_id', type=unicode,
+        '--app-id', dest='app_id', type=str,
         help='Identifier for the application')
     params = parser.parse_args(sys.argv[1:])
     transport = Transport(input_stream=sys.stdin, output_stream=sys.stdout)
@@ -49,7 +49,7 @@ def run_exchange(transport, code, app_id, side):
         util.to_bytes(code), idSymmetric=util.to_bytes(app_id))
     outbound = spake.start()
     transport.send_json({
-        'phase': u'pake',
+        'phase': 'pake',
         'body': util.bytes_to_hexstr(
             util.dict_to_bytes({
                 'pake_v1': util.bytes_to_hexstr(outbound),
@@ -77,7 +77,7 @@ class Transport(object):
     output_stream = attr.ib()
 
     def send_line(self, line):
-        self.output_stream.write(line.rstrip().encode('utf8'))
+        self.output_stream.write(line.rstrip())
         self.output_stream.write('\n')
         self.output_stream.flush()
 
@@ -85,7 +85,7 @@ class Transport(object):
         self.send_line(json.dumps(json_value))
 
     def receive_line(self):
-        return self.input_stream.readline().strip().decode('utf8')
+        return self.input_stream.readline().strip()
 
     def receive_json(self):
         return json.loads(self.receive_line())
