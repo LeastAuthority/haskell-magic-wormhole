@@ -80,3 +80,6 @@ data-files:
   - tests/python/nacl_exchange.py
   - tests/python/spake2_exchange.py
   - tests/python/version_exchange.py
+
+extra-source-files:
+  - CHANGELOG
