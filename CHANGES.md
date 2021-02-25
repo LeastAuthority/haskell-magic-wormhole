@@ -1,0 +1,48 @@
+0.3.4 (Feb 25 2021)
+=======================
+
+-   fixes the broken build caused by newer versions of protolude.
+-   integration tests scripts works with Python3.
+
+0.3.3 (May 25 2019)
+=======================
+
+-   relax the lower bound of `base` library version that was erroneously
+    raised while debugging a build failure.
+
+0.3.2 (May 24 2019)
+=======================
+
+-   upgrade to stack lts-13.22 (no code changes)
+
+0.3.1 (May 24 2019)
+=======================
+
+-   specify hedgehog version bounds, since hedgehog 1.0 breaks tests.
+
+0.3.0 (May 06 2019)
+=======================
+
+-   `Rendezvous.runClient` takes an extra parameter to pass an optional
+    externally created socket for the websocket server. This is useful
+    for running the protocol via a proxy like the tor program, which
+    exposes a socks proxy.
+-   Upper bound of the `base` library dependency relaxed so that the
+    library builds with newer releases of GHC which comes bundled with
+    corresponding versions of the `base` library.
+
+0.2.1 (October 23 2018)
+=======================
+
+-   Loosened base version constraint
+
+0.2.0 (October 23 2018)
+=======================
+
+-   API enhancements to support [wormhole-client](https://github.com/LeastAuthority/wormhole-client)
+
+0.1.0 (January 17 2018)
+=======================
+
+-   Initial release
+-   Exchange text messages with Magic Wormhole peers
