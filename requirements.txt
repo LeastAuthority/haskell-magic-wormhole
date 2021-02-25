@@ -4,6 +4,6 @@
 # we are just freezing dependencies so other people doing stuff doesn't break our CI.
 attrs==20.3.0
 magic-wormhole==0.10.3
-twisted==17.9.0
+twisted==19.2.1
 pynacl==1.2.0
 spake2==0.7
