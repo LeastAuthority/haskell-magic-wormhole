@@ -4,10 +4,10 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 6543da6a90e08ed0d2b80d06eafe8ade39c7be1a6213f9e6a33e0dcf586d9fde
+-- hash: c4c1ddfbe11ba22263ee25a7aa801d30f3177d8fcf3835d05597dc6fbf6eec70
 
 name:           magic-wormhole
-version:        0.3.3
+version:        0.3.4
 synopsis:       Interact with Magic Wormhole
 description:    Magic Wormhole is a scheme to get things from one computer to another,
                 safely.
