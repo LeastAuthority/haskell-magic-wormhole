@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: c4c1ddfbe11ba22263ee25a7aa801d30f3177d8fcf3835d05597dc6fbf6eec70
+-- hash: 1ed13cf475dc0f97f823198015bd1483d7c8ea85eddfb56bc3814eac1460ba41
 
 name:           magic-wormhole
 version:        0.3.4
@@ -23,6 +23,8 @@ maintainer:     Least Authority TFA GmbH
 license:        Apache
 license-file:   LICENSE
 build-type:     Simple
+extra-source-files:
+    CHANGELOG
 data-files:
     tests/python/derive_phase_key.py
     tests/python/nacl_exchange.py
