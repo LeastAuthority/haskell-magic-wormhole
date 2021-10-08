@@ -101,16 +101,16 @@ test-suite tasty
       aeson
     , base >=4.6 && <5
     , bytestring
-    , hedgehog >=0.6 && <1.0
+    , hedgehog
     , magic-wormhole
     , memory
     , process
     , protolude >=0.3.0 && <0.4
-    , saltine
+    , saltine >= 0.2.0.0
     , spake2 >=0.4.3
     , stm
     , tasty
-    , tasty-hedgehog >=0.2 && <1.0
+    , tasty-hedgehog
     , tasty-hspec
   other-modules:
       ClientProtocol
