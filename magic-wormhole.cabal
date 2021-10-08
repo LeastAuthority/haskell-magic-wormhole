@@ -52,7 +52,7 @@ library
     , network-uri
     , pqueue
     , protolude >=0.3.0 && <0.4
-    , saltine
+    , saltine >= 0.2.0.0
     , spake2 >=0.4.3
     , stm
     , unordered-containers
