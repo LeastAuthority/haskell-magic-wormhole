@@ -3,7 +3,9 @@ module WebSockets (tests) where
 import Protolude
 
 import Test.Tasty (TestTree)
-import Test.Tasty.Hspec (testSpec, describe, it, shouldBe)
+import Test.Tasty.Hspec (testSpec)
+import Test.Hspec(describe, it)
+import Test.Hspec.Expectations(shouldBe)
 
 import MagicWormhole.Internal.WebSockets
   ( WebSocketEndpoint(..)

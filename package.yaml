@@ -39,7 +39,7 @@ library:
     - network
     - network-uri
     - pqueue
-    - saltine
+    - saltine >= 0.2.0.0
     - spake2 >= 0.4.3
     - stm
     - unordered-containers
@@ -63,16 +63,18 @@ tests:
     dependencies:
       - aeson
       - bytestring
-      - hedgehog >= 0.6 && <1.0
+      - hedgehog
       - magic-wormhole
       - memory
       - process
-      - saltine
+      - saltine >= 0.2.0.0
       - spake2 >= 0.4.3
       - stm
       - tasty
-      - tasty-hedgehog >= 0.2 && <1.0
-      - tasty-hspec
+      - tasty-hedgehog
+      - hspec >= 2.8.3 && <3.0
+      - tasty-hspec >= 1.2 && <2.0
+      - hspec-expectations >= 0.8.1 && <1.0
 
 # These are only for tests.
 data-files:

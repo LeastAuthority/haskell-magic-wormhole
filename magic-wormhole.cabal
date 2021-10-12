@@ -1,10 +1,10 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.2.
+-- This file has been generated from package.yaml by hpack version 0.34.4.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 1ed13cf475dc0f97f823198015bd1483d7c8ea85eddfb56bc3814eac1460ba41
+-- hash: f85242f21e64e933c95b2533c593c3a633e6cf9a7b13348ef12aeeec76b8091a
 
 name:           magic-wormhole
 version:        0.3.4
@@ -38,7 +38,10 @@ source-repository head
 library
   hs-source-dirs:
       src
-  default-extensions: NoImplicitPrelude OverloadedStrings TypeApplications
+  default-extensions:
+      NoImplicitPrelude
+      OverloadedStrings
+      TypeApplications
   ghc-options: -Wall -Werror=incomplete-patterns
   build-depends:
       aeson
@@ -52,7 +55,7 @@ library
     , network-uri
     , pqueue
     , protolude >=0.3.0 && <0.4
-    , saltine >= 0.2.0.0
+    , saltine >=0.2.0.0
     , spake2 >=0.4.3
     , stm
     , unordered-containers
@@ -78,7 +81,10 @@ executable hocus-pocus
       Paths_magic_wormhole
   hs-source-dirs:
       cmd
-  default-extensions: NoImplicitPrelude OverloadedStrings TypeApplications
+  default-extensions:
+      NoImplicitPrelude
+      OverloadedStrings
+      TypeApplications
   ghc-options: -Wall -Werror=incomplete-patterns
   build-depends:
       aeson
@@ -95,23 +101,28 @@ test-suite tasty
   main-is: Tasty.hs
   hs-source-dirs:
       tests
-  default-extensions: NoImplicitPrelude OverloadedStrings TypeApplications
+  default-extensions:
+      NoImplicitPrelude
+      OverloadedStrings
+      TypeApplications
   ghc-options: -Wall -Werror=incomplete-patterns
   build-depends:
       aeson
     , base >=4.6 && <5
     , bytestring
     , hedgehog
+    , hspec >=2.8.3 && <3.0
+    , hspec-expectations >=0.8.1 && <1.0
     , magic-wormhole
     , memory
     , process
     , protolude >=0.3.0 && <0.4
-    , saltine >= 0.2.0.0
+    , saltine >=0.2.0.0
     , spake2 >=0.4.3
     , stm
     , tasty
     , tasty-hedgehog
-    , tasty-hspec
+    , tasty-hspec >=1.2 && <2.0
   other-modules:
       ClientProtocol
       FileTransfer
