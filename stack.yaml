@@ -1,10 +1,10 @@
-resolver: lts-13.22
+resolver: lts-16.17
 
 packages:
   - .
 
 extra-deps:
-- tasty-hedgehog
+- tasty-hedgehog-1.0.0.2
 - protolude-0.3.0@sha256:8361b811b420585b122a7ba715aa5923834db6e8c36309bf267df2dbf66b95ef,2693
 - spake2-0.4.3@sha256:037ca234601edaea619b8fda27d0035a9be85d60c8ac55051d9cae7cbbeae2c3,2561
 - saltine-0.2.0.0@sha256:2232a285ef326b0942bbcbfa6f465933a020f27e19552213e688fe371d66dddd
