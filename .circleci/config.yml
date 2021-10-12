@@ -52,14 +52,12 @@ jobs:
           name: enter into virtualenv and executing commands
           command: |
              source testing-venv/bin/activate
-             echo "fetch get-pip to install pip that is compatible with python 3.5"
-             wget https://bootstrap.pypa.io/3.4/get-pip.py
+             echo "fetch get-pip to install pip"
+             wget https://bootstrap.pypa.io/get-pip.py
              echo "Make pip executable"
              chmod +x ./get-pip.py
              echo "Install pip"
              ./get-pip.py
-             echo "Install older version of setuptools to work around a bug with Python 3.5"
-             pip install --upgrade 'setuptools<45.0.0'
              echo "Install dependencies"
              pip install -r requirements.txt
              echo "run Tests"
