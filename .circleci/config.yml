@@ -13,7 +13,7 @@ jobs:
             - stack-deps-{{ checksum "package.yaml" }}
       - run:
           name: Set up Stack
-          command: stack setup --no-terminal --no-reinstall
+          command: stack upgrade
       - save_cache:
           key: stack-ghc-{{ checksum "stack.yaml" }}
           paths:
