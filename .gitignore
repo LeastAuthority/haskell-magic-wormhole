@@ -4,3 +4,6 @@ doc/.env/
 doc/.ensure-pip
 doc/.ensure-virtualenv
 doc/*.svg
+dist-newstyle/*
+.policeman-evidence/*
+TAGS
