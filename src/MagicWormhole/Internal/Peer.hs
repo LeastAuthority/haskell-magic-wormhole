@@ -8,6 +8,7 @@ module MagicWormhole.Internal.Peer
   , sendMessage
   , receiveMessage
   , deriveKey
+  , makeVerificationString
   ) where
 
 import Protolude hiding (phase)
@@ -154,3 +155,6 @@ receiveMessage conn = snd <$> Sequential.next (inbound conn)
 -- Construct a new key from the encrypted connection's session key for the given purpose
 deriveKey :: EncryptedConnection -> ClientProtocol.Purpose -> SecretBox.Key
 deriveKey conn = ClientProtocol.deriveKey (sharedKey conn)
+
+makeVerificationString :: EncryptedConnection -> ByteString
+makeVerificationString conn = ClientProtocol.deriveKeyRaw (sharedKey conn) "wormhole:verifier"

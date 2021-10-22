@@ -60,6 +60,7 @@ module MagicWormhole
   , ClientProtocol.Connection
   , Peer.EncryptedConnection
   , Peer.deriveKey
+  , Peer.makeVerificationString
     -- *** Errors
   , ClientProtocol.PeerError
   , Versions.VersionsError

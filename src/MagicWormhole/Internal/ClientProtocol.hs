@@ -18,6 +18,7 @@ module MagicWormhole.Internal.ClientProtocol
   , decrypt
   , encrypt
   , deriveKey
+  , deriveKeyRaw
   , Purpose
   , phasePurpose
   ) where
@@ -126,12 +127,16 @@ deriveKey
   :: SessionKey -- ^ Key established for this session
   -> Purpose -- ^ What this key is for. Normally created using 'phasePurpose'.
   -> SecretBox.Key  -- ^ A key to use once to send or receive a message
-deriveKey (SessionKey key) purpose =
+deriveKey sessionKey purpose =
   fromMaybe (panic "Could not encode to SecretBox key") $ -- Impossible. We guarntee it's the right size.
-    Saltine.decode (HKDF.expand (HKDF.extract salt key :: HKDF.PRK SHA256) purpose keySize)
-  where
-    salt = "" :: ByteString
-    keySize = Bytes.secretbox_keybytes
+    Saltine.decode (deriveKeyRaw sessionKey purpose)
+
+deriveKeyRaw :: SessionKey -> Purpose -> ByteString
+deriveKeyRaw (SessionKey key) purpose =
+    HKDF.expand (HKDF.extract salt key :: HKDF.PRK SHA256) purpose keySize
+    where
+      salt = "" :: ByteString
+      keySize = Bytes.secretbox_keybytes
 
 -- | Obtain a 'Purpose' for deriving a key to send a message that's part of a
 -- peer-to-peer communication.
