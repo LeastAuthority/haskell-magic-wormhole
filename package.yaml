@@ -17,7 +17,7 @@ license-file: LICENSE
 github: leastauthority/haskell-magic-wormhole
 category: Crypto
 
-ghc-options: -Wall -Werror=incomplete-patterns
+ghc-options: -Wall -Werror=incomplete-patterns -Wunused-packages
 default-extensions:
   - NoImplicitPrelude
   - OverloadedStrings
