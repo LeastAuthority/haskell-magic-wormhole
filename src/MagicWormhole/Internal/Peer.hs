@@ -43,6 +43,7 @@ import qualified MagicWormhole.Internal.Versions as Versions
 establishEncryption :: ClientProtocol.Connection -> Spake2.Password -> IO EncryptedConnection
 establishEncryption peer password = do
   key <- Pake.pakeExchange peer password
+  -- At this point, we have an unverified key
   void $ Versions.versionExchange peer key
   liftIO $ atomically $ newEncryptedConnection peer key
 
