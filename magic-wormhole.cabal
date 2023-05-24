@@ -1,11 +1,5 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.4.
---
--- see: https://github.com/sol/hpack
---
--- hash: f85242f21e64e933c95b2533c593c3a633e6cf9a7b13348ef12aeeec76b8091a
-
 name:           magic-wormhole
 version:        0.3.4
 synopsis:       Interact with Magic Wormhole
