@@ -35,7 +35,7 @@ jobs:
           command: export CRYPTOGRAPHY_DONT_BUILD_RUST=1
       - run:
           name: Install Python build deps
-          command: apt install -y gcc python-dev libssl-dev libffi-dev
+          command: apt install -y gcc python3-dev libssl-dev libffi-dev
       - run:
           name: Create virtualenv
           command: virtualenv --python=python3 testing-venv
