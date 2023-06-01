@@ -15,6 +15,9 @@ jobs:
           name: Install dependencies
           command: apt install -y cabal-install ghc
       - run:
+          name: Install cabal build dependencies
+          command: apt install -y zlib1g-dev
+      - run:
           name: upgrade cabal
           command: |
              cabal update
