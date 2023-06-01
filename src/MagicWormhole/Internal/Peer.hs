@@ -20,6 +20,7 @@ import Control.Concurrent.STM.TVar
   )
 import qualified Crypto.Saltine.Core.SecretBox as SecretBox
 import qualified Crypto.Spake2 as Spake2
+import Data.Aeson (ToJSON, FromJSON)
 
 import Data.Aeson (FromJSON, ToJSON)
 
@@ -41,10 +42,10 @@ import qualified MagicWormhole.Internal.Rendezvous as Rendezvous
 -- | Establish an encrypted connection between peers.
 --
 -- Use this connection with 'withEncryptedConnection'.
-establishEncryption :: (Eq a, FromJSON a, ToJSON a) => a -> ClientProtocol.Connection -> Spake2.Password -> IO EncryptedConnection
-establishEncryption appversions peer password = do
+establishEncryption :: (FromJSON a, ToJSON a, Eq a) => ClientProtocol.Connection -> Spake2.Password -> a -> IO EncryptedConnection
+establishEncryption peer password appversion = do
   key <- Pake.pakeExchange peer password
-  void $ Versions.versionExchange peer key appversions
+  void $ Versions.versionExchange peer key appversion
   liftIO $ atomically $ newEncryptedConnection peer key
 
 -- | Run an action that communicates with a Magic Wormhole peer through an
@@ -63,11 +64,11 @@ withEncryptedConnection
   :: (Eq b, FromJSON b, ToJSON b)
   => ClientProtocol.Connection  -- ^ Underlying to a peer. Get this with 'Rendezvous.open'.
   -> Spake2.Password  -- ^ The shared password that is the basis of the encryption. Construct with 'Spake2.makePassword'.
-  -> b -- ^ Aeson-encodable type for app_versions=
+  -> b -- ^ a Aeson encodable type that represent the app version.
   -> (EncryptedConnection -> IO a)  -- ^ Action to perform with the encrypted connection.
   -> IO a  -- ^ The result of the action
-withEncryptedConnection peer password appversions action = do
-  conn <- establishEncryption appversions peer password
+withEncryptedConnection peer password appversion action = do
+  conn <- establishEncryption peer password appversion
   runEncryptedConnection conn (action conn)
 
 -- | A Magic Wormhole peer-to-peer application session.

@@ -47,7 +47,6 @@ library
     , memory
     , network
     , network-uri
-    , pqueue
     , protolude
     , saltine
     , spake2 >=0.4.3

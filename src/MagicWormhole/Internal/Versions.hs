@@ -14,7 +14,7 @@ module MagicWormhole.Internal.Versions
 import Protolude hiding (phase, toS)
 import Protolude.Conv (toS)
 
-import Data.Aeson (FromJSON, ToJSON, (.=), object, Value(..), (.:))
+import Data.Aeson (FromJSON(..), ToJSON(..), (.=), object, Value(..), (.:))
 import Data.Aeson.Types (typeMismatch)
 import qualified Data.Aeson as Aeson
 import Data.String (String)
@@ -45,8 +45,8 @@ versionExchange conn key appversions = do
   (_, theirVersions) <- concurrently sendVersion (atomically receiveVersion)
   if theirVersions /= (Versions appversions) then throwIO VersionMismatch else pure (Versions appversions)
   where
-    sendVersion = ClientProtocol.sendEncrypted conn key Messages.VersionPhase (ClientProtocol.PlainText (toS (Aeson.encode (Versions appversions))))
-    receiveVersion = do
+   sendVersion = ClientProtocol.sendEncrypted conn key Messages.VersionPhase (ClientProtocol.PlainText (toS (Aeson.encode (Versions appversions))))
+   receiveVersion = do
       (phase, ClientProtocol.PlainText plaintext) <- ClientProtocol.receiveEncrypted conn key
       unless (phase == Messages.VersionPhase) retry
       either (throwSTM . ParseError) pure $ Aeson.eitherDecode (toS plaintext)
@@ -56,21 +56,23 @@ versionExchange conn key appversions = do
 -- There are no extant Magic Wormhole implementations that send any meaningful
 -- information in their versions message, so this is just a single-valued
 -- type.
-
 data Versions a = Versions a deriving (Eq, Show)
 
 instance (ToJSON a) => ToJSON (Versions a) where
-  toJSON (Versions x) = object ["app_versions" .= (Aeson.toJSON x)]
-
--- data Versions = Versions deriving (Eq, Show)
-
--- instance ToJSON Versions where
---  toJSON _ = object ["app_versions" .= object ["supported-messages" .= ("invite-v1" :: String)]]
+  toJSON (Versions x) = object ["app_versions" .= (toJSON x)]
 
 instance (FromJSON a) => FromJSON (Versions a) where
   parseJSON (Object v) = do
     pure Versions <*> (Aeson.parseJSON =<< v .: "app_versions")
   parseJSON unknown = typeMismatch "Versions" unknown
+
+{-
+  instance (FromJSON a) => FromJSON (Versions a) where
+  parseJSON (Object v) = do
+    -- Make sure there's an object in the "app_versions" key and abort if not.
+    versions <- v .: "app_versions"
+    pure (Versions versions)
+-}
 
 -- | An error occurred during 'versionExchange'.
 data VersionsError

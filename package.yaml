@@ -1,0 +1,86 @@
+name: magic-wormhole
+version: 0.3.4
+synopsis: Interact with Magic Wormhole
+description: |
+  Magic Wormhole is a scheme to get things from one computer to another,
+  safely.
+
+  This is a library for client-side interactions with a Magic Wormhole server.
+
+author:
+  - "Jonathan M. Lange <jml@mumak.net>"
+  - "Ramakrishnan Muthukrishnan <ram@leastauthority.com>"
+  - "Jean-Paul Calderone <jean-paul@leastauthority.com>"
+maintainer: Least Authority TFA GmbH
+license: Apache
+license-file: LICENSE
+github: leastauthority/haskell-magic-wormhole
+category: Crypto
+
+ghc-options: -Wall -Werror=incomplete-patterns
+default-extensions:
+  - NoImplicitPrelude
+  - OverloadedStrings
+  - TypeApplications
+
+dependencies:
+  - base >= 4.6 && < 5
+  - protolude >= 0.3.0 && < 0.4
+
+library:
+  source-dirs: src
+  dependencies:
+    - aeson
+    - bytestring
+    - containers
+    - cryptonite
+    - hashable
+    - memory
+    - network
+    - network-uri
+    - saltine >= 0.2.0.0
+    - spake2 >= 0.4.3
+    - stm
+    - unordered-containers
+    - websockets >= 0.8.0.0
+
+executables:
+  hocus-pocus:
+    main: HocusPocus.hs
+    source-dirs: cmd
+    dependencies:
+      - aeson
+      - magic-wormhole
+      - optparse-applicative
+      - spake2 >= 0.4.3
+      - text
+
+tests:
+  tasty:
+    main: Tasty.hs
+    source-dirs: tests
+    dependencies:
+      - aeson
+      - bytestring
+      - hedgehog
+      - magic-wormhole
+      - memory
+      - process
+      - saltine >= 0.2.0.0
+      - spake2 >= 0.4.3
+      - stm
+      - tasty
+      - tasty-hedgehog
+      - hspec >= 2.8.3 && <3.0
+      - tasty-hspec >= 1.2 && <2.0
+      - hspec-expectations >= 0.8.1 && <1.0
+
+# These are only for tests.
+data-files:
+  - tests/python/derive_phase_key.py
+  - tests/python/nacl_exchange.py
+  - tests/python/spake2_exchange.py
+  - tests/python/version_exchange.py
+
+extra-source-files:
+  - CHANGELOG

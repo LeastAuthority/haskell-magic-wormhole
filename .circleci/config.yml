@@ -2,55 +2,48 @@ version: 2.1
 jobs:
   build:
     docker:
-      - image: fpco/stack-build:lts
+      - image: debian:unstable-slim
     steps:
       - checkout
-      - restore_cache:
-          keys:
-            - stack-ghc-{{ checksum "stack.yaml" }}
-      - restore_cache:
-          keys:
-            - stack-deps-{{ checksum "package.yaml" }}
       - run:
-          name: Set up Stack
-          command: stack upgrade
-      - save_cache:
-          key: stack-ghc-{{ checksum "stack.yaml" }}
-          paths:
-            - /root/.stack
-      - run:
-          # saltine needs libsodium 0.13+ and this is the only PPA I could find.
-          name: Add PPA with libsodium 0.13+
-          command: apt-add-repository -y ppa:ondrej/php
-      - run:
-          name: apt-get update
-          command: apt-get update
-      - run:
-          name: Install libsodium (for saltine)
-          command: apt-get install -y libsodium-dev
+          name: apt update
+          command: apt update
       - run:
           name: Install dependencies
-          command: stack build --skip-ghc-check --no-terminal --test --only-dependencies
-      - save_cache:
-          key: stack-deps-{{ checksum "package.yaml" }}
-          paths:
-            - /root/.stack
-            - .stack-work
+          command: apt install -y libsodium-dev pkgconf
+      - run:
+          name: Install dependencies
+          command: apt install -y cabal-install ghc
+      - run:
+          name: Install cabal build dependencies
+          command: apt install -y zlib1g-dev
+      - run:
+          name: upgrade cabal
+          command: |
+             cabal update
+             cabal install cabal-install
+      - run:
+          name: build the code
+          command: |
+             cabal configure --enable-tests
+             cabal build
       - run:
           name: Install virtualenv
-          command: apt-get install -y virtualenv
+          command: apt install -y virtualenv
       - run:
           name: Setup Environment variable to not use Rust
           command: export CRYPTOGRAPHY_DONT_BUILD_RUST=1
       - run:
-          name: Install Python build deps
-          command: apt-get install -y gcc python-dev libssl-dev libffi-dev
+          name: Install test deps
+          command: apt install -y gcc python3-dev libssl-dev libffi-dev wget
       - run:
           name: Create virtualenv
           command: virtualenv --python=python3 testing-venv
       - run:
           name: enter into virtualenv and executing commands
           command: |
+             export LC_ALL=C.UTF-8
+             export LANG=C.UTF-8
              source testing-venv/bin/activate
              echo "fetch get-pip to install pip"
              wget https://bootstrap.pypa.io/get-pip.py
@@ -61,4 +54,4 @@ jobs:
              echo "Install dependencies"
              pip install -r requirements.txt
              echo "run Tests"
-             stack test --skip-ghc-check --no-terminal magic-wormhole
+             cabal test
