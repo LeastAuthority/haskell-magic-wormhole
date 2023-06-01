@@ -19,15 +19,11 @@ jobs:
           paths:
             - /root/.stack
       - run:
-          # saltine needs libsodium 0.13+ and this is the only PPA I could find.
-          name: Add PPA with libsodium 0.13+
-          command: apt-add-repository -y ppa:ondrej/php
-      - run:
-          name: apt-get update
-          command: apt-get update
+          name: apt update
+          command: apt update
       - run:
           name: Install libsodium (for saltine)
-          command: apt-get install -y libsodium-dev
+          command: apt install -y libsodium-dev
       - run:
           name: Install dependencies
           command: stack build --skip-ghc-check --no-terminal --test --only-dependencies
@@ -38,13 +34,13 @@ jobs:
             - .stack-work
       - run:
           name: Install virtualenv
-          command: apt-get install -y virtualenv
+          command: apt install -y virtualenv
       - run:
           name: Setup Environment variable to not use Rust
           command: export CRYPTOGRAPHY_DONT_BUILD_RUST=1
       - run:
           name: Install Python build deps
-          command: apt-get install -y gcc python-dev libssl-dev libffi-dev
+          command: apt install -y gcc python-dev libssl-dev libffi-dev
       - run:
           name: Create virtualenv
           command: virtualenv --python=python3 testing-venv
