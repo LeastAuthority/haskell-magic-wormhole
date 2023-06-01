@@ -34,8 +34,8 @@ jobs:
           name: Setup Environment variable to not use Rust
           command: export CRYPTOGRAPHY_DONT_BUILD_RUST=1
       - run:
-          name: Install Python build deps
-          command: apt install -y gcc python3-dev libssl-dev libffi-dev
+          name: Install test deps
+          command: apt install -y gcc python3-dev libssl-dev libffi-dev wget
       - run:
           name: Create virtualenv
           command: virtualenv --python=python3 testing-venv
