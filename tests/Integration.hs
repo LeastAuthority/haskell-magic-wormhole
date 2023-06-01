@@ -18,6 +18,7 @@ import Control.Concurrent.STM.TChan
 import qualified Crypto.Saltine.Class as Saltine
 import qualified Crypto.Saltine.Core.SecretBox as SecretBox
 import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.KeyMap as AesonKeyMap
 import Data.ByteArray.Encoding (convertFromBase, convertToBase, Base(Base16))
 import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Char8 as Char8
@@ -87,8 +88,8 @@ tests = testSpec "Integration" $ do
         ] $ \stdin stdout -> do
           versions <- withConnection (Messages.AppID appID) (Messages.Side ourSide) stdin stdout $ \conn -> do
             sessionKey <- Pake.pakeExchange conn password'
-            Versions.versionExchange conn sessionKey
-          versions `shouldBe` Versions.Versions
+            Versions.versionExchange conn sessionKey (Aeson.Object AesonKeyMap.empty)
+          versions `shouldBe` (Versions.Versions (Aeson.Object (AesonKeyMap.fromList [])))
 
   describe "NaCL interoperability" $
     it "Swaps messages with Python" $ do
