@@ -43,7 +43,7 @@ versionExchange conn key = do
   (_, theirVersions) <- concurrently sendVersion (atomically receiveVersion)
   if theirVersions /= Versions then throwIO VersionMismatch else pure Versions
   where
-   sendVersion = ClientProtocol.sendEncrypted conn key Messages.VersionPhase (ClientProtocol.PlainText (toS (Aeson.encode Versions)))
+    sendVersion = ClientProtocol.sendEncrypted conn key Messages.VersionPhase (ClientProtocol.PlainText (toS (Aeson.encode Versions)))
     receiveVersion = do
       (phase, ClientProtocol.PlainText plaintext) <- ClientProtocol.receiveEncrypted conn key
       unless (phase == Messages.VersionPhase) retry
@@ -63,7 +63,7 @@ versionExchange conn key = do
 data Versions = Versions deriving (Eq, Show)
 
 instance ToJSON Versions where
-  toJSON _ = object ["app_versions" .= object ["supported-messages" .= "invite-v1"]]
+  toJSON _ = object ["app_versions" .= object ["supported-messages" .= ("invite-v1" :: String)]]
 
 
 instance FromJSON Versions where
