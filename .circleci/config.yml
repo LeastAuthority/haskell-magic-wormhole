@@ -9,8 +9,8 @@ jobs:
           name: apt update
           command: apt update
       - run:
-          name: Install libsodium (for saltine)
-          command: apt install -y libsodium-dev
+          name: Install dependencies
+          command: apt install -y libsodium-dev pkgconf
       - run:
           name: Install dependencies
           command: apt install -y cabal-install ghc
