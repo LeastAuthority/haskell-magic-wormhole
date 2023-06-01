@@ -25,7 +25,7 @@ jobs:
       - run:
           name: build the code
           command: |
-             cabal configure
+             cabal configure --enable-tests
              cabal build
       - run:
           name: Install virtualenv
