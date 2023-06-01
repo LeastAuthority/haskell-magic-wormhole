@@ -23,4 +23,6 @@ app_versions={
 
 main = do
   let a = InvitesVersion0
+  let v = (Versions.Versions InvitesVersion0)
   print $ toJSON a
+  print v

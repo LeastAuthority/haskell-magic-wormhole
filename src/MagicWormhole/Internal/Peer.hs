@@ -21,6 +21,8 @@ import Control.Concurrent.STM.TVar
 import qualified Crypto.Saltine.Core.SecretBox as SecretBox
 import qualified Crypto.Spake2 as Spake2
 
+import Data.Aeson (FromJSON, ToJSON)
+
 import qualified MagicWormhole.Internal.ClientProtocol as ClientProtocol
 import qualified MagicWormhole.Internal.Messages as Messages
 import qualified MagicWormhole.Internal.Pake as Pake
@@ -39,10 +41,10 @@ import qualified MagicWormhole.Internal.Rendezvous as Rendezvous
 -- | Establish an encrypted connection between peers.
 --
 -- Use this connection with 'withEncryptedConnection'.
-establishEncryption :: ClientProtocol.Connection -> Spake2.Password -> IO EncryptedConnection
-establishEncryption peer password = do
+establishEncryption :: (Eq a, FromJSON a, ToJSON a) => a -> ClientProtocol.Connection -> Spake2.Password -> IO EncryptedConnection
+establishEncryption appversions peer password = do
   key <- Pake.pakeExchange peer password
-  void $ Versions.versionExchange peer key
+  void $ Versions.versionExchange peer key appversions
   liftIO $ atomically $ newEncryptedConnection peer key
 
 -- | Run an action that communicates with a Magic Wormhole peer through an
@@ -58,12 +60,14 @@ establishEncryption peer password = do
 --   * 'Pake.PakeError', when SPAKE2 cryptography fails
 --   * 'Versions.VersionsError', when we cannot agree on shared capabilities (this can sometimes imply SPAKE2 cryptography failure)
 withEncryptedConnection
-  :: ClientProtocol.Connection  -- ^ Underlying to a peer. Get this with 'Rendezvous.open'.
+  :: (Eq b, FromJSON b, ToJSON b)
+  => ClientProtocol.Connection  -- ^ Underlying to a peer. Get this with 'Rendezvous.open'.
   -> Spake2.Password  -- ^ The shared password that is the basis of the encryption. Construct with 'Spake2.makePassword'.
+  -> b -- ^ Aeson-encodable type for app_versions=
   -> (EncryptedConnection -> IO a)  -- ^ Action to perform with the encrypted connection.
   -> IO a  -- ^ The result of the action
-withEncryptedConnection peer password action = do
-  conn <- establishEncryption peer password
+withEncryptedConnection peer password appversions action = do
+  conn <- establishEncryption appversions peer password
   runEncryptedConnection conn (action conn)
 
 -- | A Magic Wormhole peer-to-peer application session.

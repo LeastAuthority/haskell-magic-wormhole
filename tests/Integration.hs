@@ -39,6 +39,10 @@ import qualified MagicWormhole.Internal.Versions as Versions
 
 import qualified Paths_magic_wormhole
 
+data Blam = String
+instance Aeson.ToJSON => Aeson.ToJSON Blam where
+  toJSON Blam = object ["blam" .: ("asdf" :: String)]
+
 tests :: IO TestTree
 tests = testSpec "Integration" $ do
   describe "SPAKE2 and version exchange" $ do
@@ -87,8 +91,8 @@ tests = testSpec "Integration" $ do
         ] $ \stdin stdout -> do
           versions <- withConnection (Messages.AppID appID) (Messages.Side ourSide) stdin stdout $ \conn -> do
             sessionKey <- Pake.pakeExchange conn password'
-            Versions.versionExchange conn sessionKey
-          versions `shouldBe` Versions.Versions
+            Versions.versionExchange conn sessionKey (Versions.Versions Blam)
+          versions `shouldBe` (Versions.Versions Blam)
 
   describe "NaCL interoperability" $
     it "Swaps messages with Python" $ do
