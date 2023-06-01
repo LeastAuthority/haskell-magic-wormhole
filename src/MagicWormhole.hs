@@ -38,6 +38,7 @@ module MagicWormhole
   , WebSockets.parseWebSocketEndpoint
     -- ** Operations on the server
   , Rendezvous.allocate
+  , Rendezvous.release
   , Messages.Nameplate(..)
   , Rendezvous.list
   , Rendezvous.claim

@@ -38,12 +38,13 @@ import qualified MagicWormhole.Internal.Messages as Messages
 versionExchange
   :: ClientProtocol.Connection -- ^ A connection to a peer
   -> ClientProtocol.SessionKey -- ^ A shared session key. Obtain this via 'MagicWormhole.Internal.Pake.pakeExchange'.
+  -> appversions  -- ^ Anything aeson-able
   -> IO Versions  -- ^ Shared version information
 versionExchange conn key = do
   (_, theirVersions) <- concurrently sendVersion (atomically receiveVersion)
   if theirVersions /= Versions then throwIO VersionMismatch else pure Versions
   where
-    sendVersion = ClientProtocol.sendEncrypted conn key Messages.VersionPhase (ClientProtocol.PlainText (toS (Aeson.encode Versions)))
+   sendVersion = ClientProtocol.sendEncrypted conn key Messages.VersionPhase (ClientProtocol.PlainText (toS (Aeson.encode Versions appversions)))
     receiveVersion = do
       (phase, ClientProtocol.PlainText plaintext) <- ClientProtocol.receiveEncrypted conn key
       unless (phase == Messages.VersionPhase) retry
@@ -54,10 +55,10 @@ versionExchange conn key = do
 -- There are no extant Magic Wormhole implementations that send any meaningful
 -- information in their versions message, so this is just a single-valued
 -- type.
-data Versions = Versions deriving (Eq, Show)
+data Versions = Versions a deriving (Eq, Show)
 
-instance ToJSON Versions where
-  toJSON _ = object ["app_versions" .= object []]
+instance ToJSON a => ToJSON Versions a where
+  toJSON _ = object ["app_versions" .= (toJSON a)]
 
 instance FromJSON Versions where
   parseJSON (Object v) = do

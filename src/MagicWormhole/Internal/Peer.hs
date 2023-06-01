@@ -26,7 +26,7 @@ import qualified MagicWormhole.Internal.Messages as Messages
 import qualified MagicWormhole.Internal.Pake as Pake
 import qualified MagicWormhole.Internal.Sequential as Sequential
 import qualified MagicWormhole.Internal.Versions as Versions
-
+import qualified MagicWormhole.Internal.Rendezvous as Rendezvous
 
 -- XXX: Lots of duplicated code sending JSON data. Either make a typeclass for
 -- this sort of thing or at least sendJSON, receiveJSON.
@@ -85,6 +85,7 @@ data EncryptedConnection
   , inbound :: Sequential.Sequential Int (Messages.Phase, ClientProtocol.PlainText)
   , outbound :: TVar Int
   }
+
 
 -- | Construct a new encrypted connection.
 newEncryptedConnection :: ClientProtocol.Connection -> ClientProtocol.SessionKey -> STM EncryptedConnection
