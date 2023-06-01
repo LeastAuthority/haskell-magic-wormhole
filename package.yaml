@@ -38,7 +38,6 @@ library:
     - memory
     - network
     - network-uri
-    - pqueue
     - saltine >= 0.2.0.0
     - spake2 >= 0.4.3
     - stm
