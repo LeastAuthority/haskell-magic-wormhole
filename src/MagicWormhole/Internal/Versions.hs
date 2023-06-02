@@ -52,10 +52,6 @@ versionExchange conn key appversions = do
       either (throwSTM . ParseError) pure $ Aeson.eitherDecode (toS plaintext)
 
 -- | Information about the versions supported by this Magic Wormhole client.
---
--- There are no extant Magic Wormhole implementations that send any meaningful
--- information in their versions message, so this is just a single-valued
--- type.
 data Versions a = Versions a deriving (Eq, Show)
 
 instance (ToJSON a) => ToJSON (Versions a) where
@@ -63,7 +59,10 @@ instance (ToJSON a) => ToJSON (Versions a) where
 
 instance (FromJSON a) => FromJSON (Versions a) where
   parseJSON (Object v) = do
-    pure Versions <*> (Aeson.parseJSON =<< v .: "app_versions")
+--    pure Versions <*> (Aeson.parseJSON =<< v .: "app_versions")
+--    traceShowM v
+    appv <- v .: "app_versions"
+    pure (Versions appv)
   parseJSON unknown = typeMismatch "Versions" unknown
 
 {-
