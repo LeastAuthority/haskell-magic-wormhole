@@ -40,9 +40,9 @@ import qualified MagicWormhole.Internal.Versions as Versions
 
 import qualified Paths_magic_wormhole
 
-data Blam = String
-instance Aeson.ToJSON => Aeson.ToJSON Blam where
-  toJSON Blam = object ["blam" .: ("asdf" :: String)]
+--data Blam = String
+--instance Aeson.ToJSON => Aeson.ToJSON Blam where
+--  toJSON Blam = object ["blam" .: ("asdf" :: String)]
 
 tests :: IO TestTree
 tests = testSpec "Integration" $ do

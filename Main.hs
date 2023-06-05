@@ -26,3 +26,4 @@ main = do
   let v = (Versions.Versions InvitesVersion0)
   print $ toJSON a
   print v
+  print $ toJSON v

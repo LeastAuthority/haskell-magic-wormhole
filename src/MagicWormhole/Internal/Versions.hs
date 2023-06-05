@@ -48,6 +48,7 @@ versionExchange conn key appversions = do
    sendVersion = ClientProtocol.sendEncrypted conn key Messages.VersionPhase (ClientProtocol.PlainText (toS (Aeson.encode (Versions appversions))))
    receiveVersion = do
       (phase, ClientProtocol.PlainText plaintext) <- ClientProtocol.receiveEncrypted conn key
+--      traceShowM plaintext
       unless (phase == Messages.VersionPhase) retry
       either (throwSTM . ParseError) pure $ Aeson.eitherDecode (toS plaintext)
 
