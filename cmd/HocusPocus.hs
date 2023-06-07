@@ -11,6 +11,7 @@ import qualified Options.Applicative as Opt
 
 import qualified Crypto.Spake2 as Spake2
 import qualified Data.Aeson as Aeson
+import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Text as Text
 
 import qualified MagicWormhole
@@ -66,7 +67,7 @@ sendText session password message = do
   mailbox <- MagicWormhole.claim session nameplate
   peer <- MagicWormhole.open session mailbox  -- XXX: We should run `close` in the case of exceptions?
   let (MagicWormhole.Nameplate n) = nameplate
-  MagicWormhole.withEncryptedConnection peer (Spake2.makePassword (toS n <> "-" <> password))
+  MagicWormhole.withEncryptedConnection peer (Spake2.makePassword (toS n <> "-" <> password)) (Aeson.Object HashMap.empty)
     (\conn -> do
         let offer = MagicWormhole.Message message
         MagicWormhole.sendMessage conn (MagicWormhole.PlainText (toS (Aeson.encode offer))))
@@ -83,7 +84,7 @@ receiveText session = do
   putText "Password: "
   password <- getLine
   let fullPassword = toS nameplate <> "-" <> toS password
-  MagicWormhole.withEncryptedConnection peer (Spake2.makePassword fullPassword)
+  MagicWormhole.withEncryptedConnection peer (Spake2.makePassword fullPassword) (Aeson.Object HashMap.empty)
     (\conn -> do
         MagicWormhole.PlainText received <- atomically $ MagicWormhole.receiveMessage conn
         case Aeson.eitherDecode (toS received) of
@@ -108,11 +109,11 @@ bounce endpoint appID = do
       (_, output) <- concurrently (send peer1 message) (receive peer2)
       unless (output == message) $ panic $ "Mismatched messages: " <> show message <> " != " <> show output
   where
-    send peer message = MagicWormhole.withEncryptedConnection peer password $ \conn -> do
+    send peer message = MagicWormhole.withEncryptedConnection peer password (Aeson.Object HashMap.empty) $ \conn -> do
       let offer = MagicWormhole.Message message
       MagicWormhole.sendMessage conn (MagicWormhole.PlainText (toS (Aeson.encode offer)))
 
-    receive peer = MagicWormhole.withEncryptedConnection peer password $ \conn -> do
+    receive peer = MagicWormhole.withEncryptedConnection peer password (Aeson.Object HashMap.empty) $ \conn -> do
       MagicWormhole.PlainText received <- atomically $ MagicWormhole.receiveMessage conn
       case Aeson.eitherDecode (toS received) of
         Left err -> panic $ "Could not decode message: " <> show err

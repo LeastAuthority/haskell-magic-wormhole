@@ -14,7 +14,7 @@ module MagicWormhole.Internal.Versions
 import Protolude hiding (phase, toS)
 import Protolude.Conv (toS)
 
-import Data.Aeson (FromJSON, ToJSON, (.=), object, Value(..), (.:))
+import Data.Aeson (FromJSON(..), ToJSON(..), (.=), object, Value(..), (.:))
 import Data.Aeson.Types (typeMismatch)
 import qualified Data.Aeson as Aeson
 import Data.String (String)
@@ -36,35 +36,43 @@ import qualified MagicWormhole.Internal.Messages as Messages
 --
 -- Can throw an 'Error' if something goes wrong.
 versionExchange
-  :: ClientProtocol.Connection -- ^ A connection to a peer
+  :: (Eq a, ToJSON a, FromJSON a)
+  => ClientProtocol.Connection -- ^ A connection to a peer
   -> ClientProtocol.SessionKey -- ^ A shared session key. Obtain this via 'MagicWormhole.Internal.Pake.pakeExchange'.
-  -> IO Versions  -- ^ Shared version information
-versionExchange conn key = do
+  -> a -- ^ some Aeson-able
+  -> IO (Versions a)  -- ^ Shared version information
+versionExchange conn key appversions = do
   (_, theirVersions) <- concurrently sendVersion (atomically receiveVersion)
-  if theirVersions /= Versions then throwIO VersionMismatch else pure Versions
+  if theirVersions /= (Versions appversions) then throwIO VersionMismatch else pure (Versions appversions)
   where
-    sendVersion = ClientProtocol.sendEncrypted conn key Messages.VersionPhase (ClientProtocol.PlainText (toS (Aeson.encode Versions)))
-    receiveVersion = do
+   sendVersion = ClientProtocol.sendEncrypted conn key Messages.VersionPhase (ClientProtocol.PlainText (toS (Aeson.encode (Versions appversions))))
+   receiveVersion = do
       (phase, ClientProtocol.PlainText plaintext) <- ClientProtocol.receiveEncrypted conn key
+--      traceShowM plaintext
       unless (phase == Messages.VersionPhase) retry
       either (throwSTM . ParseError) pure $ Aeson.eitherDecode (toS plaintext)
 
 -- | Information about the versions supported by this Magic Wormhole client.
---
--- There are no extant Magic Wormhole implementations that send any meaningful
--- information in their versions message, so this is just a single-valued
--- type.
-data Versions = Versions deriving (Eq, Show)
+data Versions a = Versions a deriving (Eq, Show)
 
-instance ToJSON Versions where
-  toJSON _ = object ["app_versions" .= object []]
+instance (ToJSON a) => ToJSON (Versions a) where
+  toJSON (Versions x) = object ["app_versions" .= (toJSON x)]
 
-instance FromJSON Versions where
+instance (FromJSON a) => FromJSON (Versions a) where
+  parseJSON (Object v) = do
+--    pure Versions <*> (Aeson.parseJSON =<< v .: "app_versions")
+--    traceShowM v
+    appv <- v .: "app_versions"
+    pure (Versions appv)
+  parseJSON unknown = typeMismatch "Versions" unknown
+
+{-
+  instance (FromJSON a) => FromJSON (Versions a) where
   parseJSON (Object v) = do
     -- Make sure there's an object in the "app_versions" key and abort if not.
-    (Object _versions) <- v .: "app_versions"
-    pure Versions
-  parseJSON unknown = typeMismatch "Versions" unknown
+    versions <- v .: "app_versions"
+    pure (Versions versions)
+-}
 
 -- | An error occurred during 'versionExchange'.
 data VersionsError
