@@ -27,7 +27,7 @@ import Protolude.Conv (toS)
 
 import Crypto.Hash (SHA256(..), hashWith)
 import qualified Crypto.KDF.HKDF as HKDF
-import qualified Crypto.Saltine.Internal.SecretBox as Bytes
+import qualified Crypto.Saltine.Internal.ByteSizes as Bytes
 import qualified Crypto.Saltine.Class as Saltine
 import qualified Crypto.Saltine.Core.SecretBox as SecretBox
 import qualified Data.ByteArray as ByteArray
@@ -106,7 +106,7 @@ decryptMessage key message =
 -- Encrypted using 'encrypt'.
 decrypt :: SecretBox.Key -> CipherText -> Either PeerError PlainText
 decrypt key (CipherText ciphertext) = do
-  let (nonce', ciphertext') = ByteString.splitAt Bytes.secretbox_noncebytes ciphertext
+  let (nonce', ciphertext') = ByteString.splitAt Bytes.secretBoxNonce ciphertext
   nonce <- note (InvalidNonce nonce') $ Saltine.decode nonce'
   note (CouldNotDecrypt ciphertext') $ PlainText <$> SecretBox.secretboxOpen key nonce ciphertext'
 
@@ -131,7 +131,7 @@ deriveKey (SessionKey key) purpose =
     Saltine.decode (HKDF.expand (HKDF.extract salt key :: HKDF.PRK SHA256) purpose keySize)
   where
     salt = "" :: ByteString
-    keySize = Bytes.secretbox_keybytes
+    keySize = Bytes.secretBoxKey
 
 -- | Obtain a 'Purpose' for deriving a key to send a message that's part of a
 -- peer-to-peer communication.

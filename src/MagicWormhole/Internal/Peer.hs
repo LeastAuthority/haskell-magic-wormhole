@@ -20,13 +20,16 @@ import Control.Concurrent.STM.TVar
   )
 import qualified Crypto.Saltine.Core.SecretBox as SecretBox
 import qualified Crypto.Spake2 as Spake2
+import Data.Aeson (ToJSON, FromJSON)
+
+import Data.Aeson (FromJSON, ToJSON)
 
 import qualified MagicWormhole.Internal.ClientProtocol as ClientProtocol
 import qualified MagicWormhole.Internal.Messages as Messages
 import qualified MagicWormhole.Internal.Pake as Pake
 import qualified MagicWormhole.Internal.Sequential as Sequential
 import qualified MagicWormhole.Internal.Versions as Versions
-
+import qualified MagicWormhole.Internal.Rendezvous as Rendezvous
 
 -- XXX: Lots of duplicated code sending JSON data. Either make a typeclass for
 -- this sort of thing or at least sendJSON, receiveJSON.
@@ -39,10 +42,10 @@ import qualified MagicWormhole.Internal.Versions as Versions
 -- | Establish an encrypted connection between peers.
 --
 -- Use this connection with 'withEncryptedConnection'.
-establishEncryption :: ClientProtocol.Connection -> Spake2.Password -> IO EncryptedConnection
-establishEncryption peer password = do
+establishEncryption :: (FromJSON a, ToJSON a, Eq a) => ClientProtocol.Connection -> Spake2.Password -> a -> IO EncryptedConnection
+establishEncryption peer password appversion = do
   key <- Pake.pakeExchange peer password
-  void $ Versions.versionExchange peer key
+  void $ Versions.versionExchange peer key appversion
   liftIO $ atomically $ newEncryptedConnection peer key
 
 -- | Run an action that communicates with a Magic Wormhole peer through an
@@ -58,12 +61,14 @@ establishEncryption peer password = do
 --   * 'Pake.PakeError', when SPAKE2 cryptography fails
 --   * 'Versions.VersionsError', when we cannot agree on shared capabilities (this can sometimes imply SPAKE2 cryptography failure)
 withEncryptedConnection
-  :: ClientProtocol.Connection  -- ^ Underlying to a peer. Get this with 'Rendezvous.open'.
+  :: (Eq b, FromJSON b, ToJSON b)
+  => ClientProtocol.Connection  -- ^ Underlying to a peer. Get this with 'Rendezvous.open'.
   -> Spake2.Password  -- ^ The shared password that is the basis of the encryption. Construct with 'Spake2.makePassword'.
+  -> b -- ^ a Aeson encodable type that represent the app version.
   -> (EncryptedConnection -> IO a)  -- ^ Action to perform with the encrypted connection.
   -> IO a  -- ^ The result of the action
-withEncryptedConnection peer password action = do
-  conn <- establishEncryption peer password
+withEncryptedConnection peer password appversion action = do
+  conn <- establishEncryption peer password appversion
   runEncryptedConnection conn (action conn)
 
 -- | A Magic Wormhole peer-to-peer application session.
@@ -85,6 +90,7 @@ data EncryptedConnection
   , inbound :: Sequential.Sequential Int (Messages.Phase, ClientProtocol.PlainText)
   , outbound :: TVar Int
   }
+
 
 -- | Construct a new encrypted connection.
 newEncryptedConnection :: ClientProtocol.Connection -> ClientProtocol.SessionKey -> STM EncryptedConnection
