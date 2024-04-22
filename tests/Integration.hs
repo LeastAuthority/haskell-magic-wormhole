@@ -18,7 +18,7 @@ import Control.Concurrent.STM.TChan
 import qualified Crypto.Saltine.Class as Saltine
 import qualified Crypto.Saltine.Core.SecretBox as SecretBox
 import qualified Data.Aeson as Aeson
-import qualified Data.HashMap.Strict as HashMap
+import qualified Data.Aeson.KeyMap as AesonKeyMap
 import Data.ByteArray.Encoding (convertFromBase, convertToBase, Base(Base16))
 import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Char8 as Char8
@@ -40,9 +40,9 @@ import qualified MagicWormhole.Internal.Versions as Versions
 
 import qualified Paths_magic_wormhole
 
---data Blam = String
---instance Aeson.ToJSON => Aeson.ToJSON Blam where
---  toJSON Blam = object ["blam" .: ("asdf" :: String)]
+---data Blam = String
+---instance Aeson.ToJSON => Aeson.ToJSON Blam where
+---  toJSON Blam = object ["blam" .: ("asdf" :: String)]
 
 tests :: IO TestTree
 tests = testSpec "Integration" $ do
@@ -94,8 +94,8 @@ tests = testSpec "Integration" $ do
             sessionKey <- Pake.pakeExchange conn password'
 --            Versions.versionExchange conn sessionKey (Versions.Versions Blam)
 --          versions `shouldBe` (Versions.Versions Blam)
-            Versions.versionExchange conn sessionKey (Aeson.Object HashMap.empty)
-          versions `shouldBe` (Versions.Versions (Aeson.Object HashMap.empty))
+            Versions.versionExchange conn sessionKey (Aeson.Object AesonKeyMap.empty)
+          versions `shouldBe` (Versions.Versions (Aeson.Object (AesonKeyMap.fromList [])))
 
   describe "NaCL interoperability" $
     it "Swaps messages with Python" $ do
