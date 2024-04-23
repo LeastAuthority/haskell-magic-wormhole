@@ -25,7 +25,7 @@ default-extensions:
 
 dependencies:
   - base >= 4.6 && < 5
-  - protolude >= 0.3.0 && < 0.4
+  - protolude
 
 library:
   source-dirs: src
@@ -38,7 +38,7 @@ library:
     - memory
     - network
     - network-uri
-    - saltine >= 0.2.0.0
+    - saltine
     - spake2 >= 0.4.3
     - stm
     - unordered-containers
@@ -54,6 +54,7 @@ executables:
       - optparse-applicative
       - spake2 >= 0.4.3
       - text
+      - unordered-containers
 
 tests:
   tasty:
@@ -66,14 +67,15 @@ tests:
       - magic-wormhole
       - memory
       - process
-      - saltine >= 0.2.0.0
+      - saltine
       - spake2 >= 0.4.3
       - stm
       - tasty
       - tasty-hedgehog
-      - hspec >= 2.8.3 && <3.0
-      - tasty-hspec >= 1.2 && <2.0
-      - hspec-expectations >= 0.8.1 && <1.0
+      - hspec
+      - tasty-hspec
+      - hspec-expectations
+      - unordered-containers
 
 # These are only for tests.
 data-files:
